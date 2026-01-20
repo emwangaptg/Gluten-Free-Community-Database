@@ -49,27 +49,33 @@
             box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1);
         }
 
-        .category-chip {
-            padding: 6px 14px;
-            border-radius: 99px;
-            font-size: 13px;
-            font-weight: bold;
+        /* 資料夾卡片樣式 */
+        .folder-card {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(251, 146, 60, 0.1);
+            border: 2px solid #ffedd5;
             cursor: pointer;
             transition: all 0.2s;
-            border: 1px solid transparent;
+            height: 140px;
+            position: relative;
+            overflow: hidden;
         }
-        .category-chip.active {
-            background-color: #ffedd5;
-            color: #c2410c;
-            border-color: #fdba74;
-        }
-        .category-chip.inactive {
-            background-color: white;
-            color: #9ca3af;
-            border-color: #e5e7eb;
+        .folder-card:active { transform: scale(0.96); background-color: #fff7ed; }
+        .folder-icon { font-size: 40px; margin-bottom: 10px; color: #fb923c; }
+        .folder-count { 
+            position: absolute; top: 10px; right: 10px; 
+            background: #fed7aa; color: #9a3412; 
+            font-size: 10px; font-weight: bold; 
+            padding: 2px 8px; border-radius: 10px;
         }
 
-        /* 圖片容器 */
         .img-box {
             width: 100%;
             height: 160px;
@@ -89,7 +95,6 @@
             object-fit: cover;
         }
 
-        /* 搜尋建議下拉 */
         .suggestions {
             position: absolute;
             background: white;
@@ -107,9 +112,7 @@
             font-size: 14px;
             cursor: pointer;
         }
-        .suggestion-item:hover { background-color: #fff7ed; color: #ea580c; }
         
-        /* 飲食標籤選單樣式 */
         .diet-option {
             border: 2px solid #e5e7eb;
             border-radius: 12px;
@@ -123,6 +126,23 @@
             background-color: #fff7ed;
             color: #c2410c;
         }
+
+        /* 麵包屑導航 */
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            margin-bottom: 16px;
+            color: #9a3412;
+            font-weight: bold;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+        .breadcrumb-item { cursor: pointer; opacity: 0.7; }
+        .breadcrumb-item:hover { opacity: 1; text-decoration: underline; }
+        .breadcrumb-current { opacity: 1; }
+        .breadcrumb-arrow { opacity: 0.4; font-size: 10px; }
     </style>
 </head>
 <body>
@@ -131,8 +151,8 @@
     
     <!-- 頂部導航 -->
     <header class="px-6 pt-6 pb-4 bg-white sticky top-0 z-20 shadow-sm rounded-b-[30px]">
-        <div class="flex justify-between items-center mb-4">
-            <h1 class="text-2xl font-bold text-orange-600 flex items-center gap-2">
+        <div class="flex justify-between items-center mb-2">
+            <h1 class="text-2xl font-bold text-orange-600 flex items-center gap-2 cursor-pointer" @click="resetView">
                 <i class="fa-solid fa-wheat-awn-circle-exclamation"></i>
                 GF Radar
             </h1>
@@ -144,105 +164,127 @@
             </div>
         </div>
 
-        <!-- 搜尋與篩選區 -->
-        <div class="space-y-3">
-            <div class="relative">
-                <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i>
-                <input type="text" v-model="searchQuery" placeholder="搜尋商品、地點..." class="input-std pl-10 py-2.5 text-sm">
-            </div>
+        <!-- 麵包屑導航 -->
+        <div class="breadcrumb px-1 scrollbar-hide">
+            <div class="breadcrumb-item" @click="resetView"><i class="fa-solid fa-house"></i> 首頁</div>
             
-            <!-- 地區篩選 -->
-            <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                <button v-for="r in regions" :key="r" 
-                    @click="filter.region = filter.region === r ? '' : r"
-                    :class="['category-chip whitespace-nowrap', filter.region === r || (!filter.region && r === '全部') ? 'active' : 'inactive']">
-                    {{ r === '' ? '全部地區' : r }}
-                </button>
+            <span v-if="navState.region" class="breadcrumb-arrow"><i class="fa-solid fa-chevron-right"></i></span>
+            <div v-if="navState.region" class="breadcrumb-item" @click="navState.storeType = null" :class="{'breadcrumb-current': !navState.storeType}">
+                {{ navState.region }}
             </div>
+
+            <span v-if="navState.storeType" class="breadcrumb-arrow"><i class="fa-solid fa-chevron-right"></i></span>
+            <div v-if="navState.storeType" class="breadcrumb-item breadcrumb-current">
+                {{ getStoreTypeLabel(navState.storeType) }}
+            </div>
+        </div>
+
+        <!-- 搜尋 (只在商品列表頁顯示，或作為全域搜尋) -->
+        <div v-if="navState.storeType" class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i>
+            <input type="text" v-model="searchQuery" placeholder="搜尋此分類下的商品..." class="input-std pl-10 py-2.5 text-sm">
         </div>
     </header>
 
-    <!-- 主要列表區 -->
-    <main class="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-24">
+    <!-- 主要內容區 -->
+    <main class="flex-1 overflow-y-auto px-4 py-4 pb-24">
         
         <div v-if="loading" class="text-center py-10 text-gray-400">
             <i class="fa-solid fa-circle-notch fa-spin text-2xl mb-2"></i>
             <p class="text-sm">正在同步社群資料...</p>
         </div>
 
-        <div v-else-if="filteredProducts.length === 0" class="text-center py-20 text-gray-400">
-            <i class="fa-solid fa-cookie-bite text-4xl mb-3 text-orange-200"></i>
-            <p>目前沒有相關商品</p>
-            <p class="text-xs mt-1">成為第一個分享的人吧！</p>
+        <!-- Level 1: 地區資料夾 (Root) -->
+        <div v-else-if="!navState.region" class="grid grid-cols-2 gap-4 animate-slide-up">
+            <div v-for="region in regions" :key="region" @click="navState.region = region" class="folder-card">
+                <span class="folder-count">{{ getRegionCount(region) }}</span>
+                <i class="fa-solid fa-map-location-dot folder-icon"></i>
+                <h3 class="font-bold text-lg text-slate-800">{{ region }}</h3>
+                <p class="text-xs text-gray-500 mt-1">點擊進入</p>
+            </div>
         </div>
 
-        <div v-for="product in filteredProducts" :key="product.id" class="card p-4 flex flex-col gap-3 group relative overflow-hidden">
-            <!-- 區域標籤 -->
-            <div class="absolute top-0 right-0 bg-orange-100 text-orange-600 text-[10px] font-bold px-3 py-1 rounded-bl-xl z-10">
-                {{ product.region }}
+        <!-- Level 2: 商店類型資料夾 (Selected Region) -->
+        <div v-else-if="navState.region && !navState.storeType" class="grid grid-cols-2 gap-4 animate-slide-up">
+            <div v-for="type in storeTypes" :key="type.value" @click="navState.storeType = type.value" class="folder-card">
+                <span class="folder-count">{{ getStoreTypeCount(navState.region, type.value) }}</span>
+                <i :class="type.icon + ' folder-icon'"></i>
+                <h3 class="font-bold text-base text-slate-800">{{ type.label }}</h3>
+                <p class="text-[10px] text-gray-400 mt-1 px-1 leading-tight">{{ type.desc }}</p>
             </div>
+        </div>
 
-            <!-- 商品頭部 -->
-            <div class="flex gap-3 relative">
-                <div class="w-20 h-20 rounded-xl bg-gray-100 shrink-0 overflow-hidden cursor-pointer" @click="viewImage(product.frontImage)">
-                    <img :src="product.frontImage" class="w-full h-full object-cover">
-                </div>
-                <div class="flex-1 min-w-0 pr-8"> <!-- pr-8 留空間給操作按鈕 -->
-                    <div class="flex flex-col">
-                        <h3 class="font-bold text-slate-800 text-lg leading-tight truncate mb-1">{{ product.name }}</h3>
-                        
-                        <!-- 飲食標籤顯示 -->
-                        <div class="mb-1">
-                            <span v-if="product.dietary === 'no-dairy'" class="inline-flex items-center gap-1 text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold">
-                                <i class="fa-solid fa-cow"></i> 無奶
-                            </span>
-                            <span v-else-if="product.dietary === 'no-gluten'" class="inline-flex items-center gap-1 text-[10px] bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-bold">
-                                <i class="fa-solid fa-wheat-awn-circle-exclamation"></i> 無麩
-                            </span>
-                            <span v-else-if="product.dietary === 'double-free'" class="inline-flex items-center gap-1 text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-bold">
-                                <i class="fa-solid fa-check-double"></i> 無奶麩
-                            </span>
-                        </div>
-
-                        <div class="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
-                            <span class="bg-gray-100 px-2 py-0.5 rounded-md">{{ product.category }}</span>
-                            <span class="bg-gray-100 px-2 py-0.5 rounded-md text-orange-500 font-bold truncate max-w-[120px]">
-                                <i class="fa-solid fa-location-dot mr-1"></i>{{ product.location }}
-                            </span>
-                        </div>
-                        <div class="mt-2 font-bold text-orange-600">
-                            約 NT$ {{ product.price }}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 編輯/刪除按鈕 (絕對定位在右上角下面一點，或是彈性佈局) -->
-                <div class="absolute right-0 top-6 flex flex-col gap-2">
-                   <button @click="editProduct(product)" class="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-100 transition shadow-sm">
-                       <i class="fa-solid fa-pen text-xs"></i>
-                   </button>
-                   <button @click="confirmDelete(product.id)" class="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition shadow-sm">
-                       <i class="fa-solid fa-trash text-xs"></i>
-                   </button>
-                </div>
-            </div>
-
-            <!-- 成分表展開 -->
-            <div class="bg-orange-50/50 rounded-xl p-3 border border-orange-100 cursor-pointer hover:bg-orange-50 transition" @click="viewImage(product.ingredientImage)">
-                <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                    <i class="fa-solid fa-list-check text-orange-400"></i>
-                    <span>成分表 (點擊放大檢查)</span>
-                </div>
-                <div class="h-16 w-full rounded-lg overflow-hidden relative">
-                    <img :src="product.ingredientImage" class="w-full h-full object-cover opacity-80 hover:opacity-100 transition">
-                    <div class="absolute inset-0 flex items-center justify-center bg-black/5">
-                        <i class="fa-solid fa-magnifying-glass-plus text-white drop-shadow-md"></i>
-                    </div>
-                </div>
-            </div>
+        <!-- Level 3: 商品列表 (Selected Region & StoreType) -->
+        <div v-else class="space-y-4 animate-slide-up">
             
-            <div class="text-[10px] text-gray-300 text-right">
-                由 {{ product.uploaderId ? product.uploaderId.substring(0,6) + '...' : '匿名旅人' }} 分享於 {{ formatDate(product.timestamp) }}
+            <div v-if="filteredProducts.length === 0" class="text-center py-20 text-gray-400">
+                <i class="fa-solid fa-cookie-bite text-4xl mb-3 text-orange-200"></i>
+                <p>這裡還沒有商品</p>
+                <p class="text-xs mt-1">按右下角 + 分享第一個吧！</p>
+            </div>
+
+            <div v-for="product in filteredProducts" :key="product.id" class="card p-4 flex flex-col gap-3 group relative overflow-hidden">
+                <!-- 商品頭部 -->
+                <div class="flex gap-3 relative">
+                    <div class="w-20 h-20 rounded-xl bg-gray-100 shrink-0 overflow-hidden cursor-pointer" @click="viewImage(product.frontImage)">
+                        <img :src="product.frontImage" class="w-full h-full object-cover">
+                    </div>
+                    <div class="flex-1 min-w-0 pr-8">
+                        <div class="flex flex-col">
+                            <h3 class="font-bold text-slate-800 text-lg leading-tight truncate mb-1">{{ product.name }}</h3>
+                            
+                            <!-- 飲食標籤 -->
+                            <div class="mb-1">
+                                <span v-if="product.dietary === 'no-dairy'" class="inline-flex items-center gap-1 text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold">
+                                    <i class="fa-solid fa-cow"></i> 無奶
+                                </span>
+                                <span v-else-if="product.dietary === 'no-gluten'" class="inline-flex items-center gap-1 text-[10px] bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-bold">
+                                    <i class="fa-solid fa-wheat-awn-circle-exclamation"></i> 無麩
+                                </span>
+                                <span v-else-if="product.dietary === 'double-free'" class="inline-flex items-center gap-1 text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-bold">
+                                    <i class="fa-solid fa-check-double"></i> 無奶麩
+                                </span>
+                            </div>
+
+                            <div class="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
+                                <span class="bg-gray-100 px-2 py-0.5 rounded-md text-orange-500 font-bold truncate max-w-[140px]">
+                                    <i class="fa-solid fa-location-dot mr-1"></i>{{ product.location }}
+                                </span>
+                            </div>
+                            <div class="mt-2 font-bold text-orange-600">
+                                約 NT$ {{ product.price }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 編輯/刪除按鈕 -->
+                    <div class="absolute right-0 top-6 flex flex-col gap-2">
+                       <button @click="editProduct(product)" class="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-100 transition shadow-sm">
+                           <i class="fa-solid fa-pen text-xs"></i>
+                       </button>
+                       <button @click="confirmDelete(product.id)" class="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition shadow-sm">
+                           <i class="fa-solid fa-trash text-xs"></i>
+                       </button>
+                    </div>
+                </div>
+
+                <!-- 成分表 -->
+                <div class="bg-orange-50/50 rounded-xl p-3 border border-orange-100 cursor-pointer hover:bg-orange-50 transition" @click="viewImage(product.ingredientImage)">
+                    <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                        <i class="fa-solid fa-list-check text-orange-400"></i>
+                        <span>成分表 (點擊放大檢查)</span>
+                    </div>
+                    <div class="h-16 w-full rounded-lg overflow-hidden relative">
+                        <img :src="product.ingredientImage" class="w-full h-full object-cover opacity-80 hover:opacity-100 transition">
+                        <div class="absolute inset-0 flex items-center justify-center bg-black/5">
+                            <i class="fa-solid fa-magnifying-glass-plus text-white drop-shadow-md"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-[10px] text-gray-300 text-right">
+                    由 {{ product.uploaderId ? product.uploaderId.substring(0,6) + '...' : '匿名旅人' }} 分享
+                </div>
             </div>
         </div>
 
@@ -265,7 +307,7 @@
 
             <div class="space-y-5">
                 
-                <!-- 1. 照片上傳區 -->
+                <!-- 1. 照片上傳 -->
                 <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-2">
                         <label class="text-xs font-bold text-gray-500">正面包裝照 <span class="text-red-400">*</span></label>
@@ -291,7 +333,7 @@
                     </div>
                 </div>
 
-                <!-- 新增：飲食標籤選擇區 -->
+                <!-- 飲食標籤 -->
                 <div>
                     <label class="text-xs font-bold text-gray-500 mb-2 block">飲食標籤 <span class="text-red-400">*</span></label>
                     <div class="grid grid-cols-3 gap-2">
@@ -311,18 +353,9 @@
                 </div>
 
                 <!-- 2. 基本資訊 -->
-                <div class="relative">
+                <div>
                     <label class="text-xs font-bold text-gray-500 mb-1">商品名稱 <span class="text-red-400">*</span></label>
-                    <input type="text" v-model="form.name" class="input-std" placeholder="例如：米製義大利麵" @input="checkDuplicateName">
-                    <!-- 類似商品提醒 -->
-                    <div v-if="similarProducts.length > 0 && !editingId" class="suggestions">
-                        <div class="bg-orange-50 p-2 text-xs text-orange-600 font-bold border-b border-orange-100">
-                            <i class="fa-solid fa-triangle-exclamation mr-1"></i> 社群內已有類似商品：
-                        </div>
-                        <div v-for="p in similarProducts" :key="p.id" class="suggestion-item text-gray-500">
-                            {{ p.name }} ({{ p.location }})
-                        </div>
-                    </div>
+                    <input type="text" v-model="form.name" class="input-std" placeholder="例如：米製義大利麵">
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
@@ -337,22 +370,23 @@
                         </select>
                     </div>
                     <div>
-                        <label class="text-xs font-bold text-gray-500 mb-1">分類</label>
-                        <select v-model="form.category" class="input-std bg-white">
-                            <option value="零食">🍪 零食/點心</option>
-                            <option value="主食">🍜 麵/飯/麵包</option>
-                            <option value="醬料">🥣 醬料/調味</option>
-                            <option value="飲品">🥤 飲料/酒</option>
-                            <option value="其他">📦 其他</option>
+                        <!-- 新增：商店類型 -->
+                        <label class="text-xs font-bold text-gray-500 mb-1">商店類型</label>
+                        <select v-model="form.storeType" class="input-std bg-white">
+                            <option value="convenience">🏪 便利商店</option>
+                            <option value="supermarket">🛒 超市/大賣場</option>
+                            <option value="donki">🐧 唐吉訶德/日系</option>
+                            <option value="organic">🌿 有機/健康選物</option>
+                            <option value="drugstore">💊 藥妝店</option>
+                            <option value="other">📦 其他</option>
                         </select>
                     </div>
                 </div>
 
                 <!-- 3. 購買資訊 -->
                 <div class="relative">
-                    <label class="text-xs font-bold text-gray-500 mb-1">購買地點/店鋪 <span class="text-red-400">*</span></label>
+                    <label class="text-xs font-bold text-gray-500 mb-1">購買地點/店鋪名稱 <span class="text-red-400">*</span></label>
                     <input type="text" v-model="form.location" class="input-std" placeholder="例如：7-11, 全聯, Donki..." @focus="showLocSuggestions=true" @blur="hideSuggestions">
-                    <!-- 地點建議 -->
                     <div v-if="showLocSuggestions" class="suggestions">
                         <div v-for="loc in suggestedLocations" :key="loc" class="suggestion-item" @click="form.location = loc">
                             {{ loc }}
@@ -380,7 +414,7 @@
     <div v-if="showConfig" class="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/80">
         <div class="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl">
             <h3 class="font-bold text-lg mb-4 text-slate-800">連線設定 (進階)</h3>
-            <p class="text-xs text-gray-500 mb-3">若您想連結自己的資料庫，可在此輸入 Config。若留空則使用預設公用資料庫。</p>
+            <p class="text-xs text-gray-500 mb-3">若您想連結自己的資料庫，可在此輸入 Config。</p>
             <textarea v-model="firebaseConfigInput" class="w-full h-32 border border-gray-300 rounded-xl p-3 text-xs font-mono bg-gray-50 mb-4" placeholder='{ "apiKey": "...", ... }'></textarea>
             <div class="flex gap-2">
                 <button @click="showConfig = false" class="flex-1 py-2 rounded-lg border border-gray-200">關閉</button>
@@ -415,7 +449,6 @@
         serverTimestamp 
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // 預設公用資料庫 (Public Demo)
     const DEFAULT_CONFIG = {
         apiKey: "AIzaSyBMZkTTRKgogrkSLfwrnmmMcUvZk5rSJ9w", 
         authDomain: "mymoney-8e727.firebaseapp.com",
@@ -425,7 +458,7 @@
         appId: "1:697114335542:web:4036b6b490f028efcdbb97"
     };
 
-    const { createApp, ref, reactive, computed, onMounted } = Vue;
+    const { createApp, ref, reactive, computed, onMounted, watch } = Vue;
 
     createApp({
         setup() {
@@ -440,21 +473,37 @@
             // Data
             const products = ref([]);
             const searchQuery = ref('');
-            const filter = reactive({ region: '', category: '' });
             const user = ref(null);
-            const regions = ['台灣', '日本', '韓國', '歐美', '其他'];
+            
+            // Navigation State
+            const navState = reactive({
+                region: null,      // Level 1: Taiwan, Japan...
+                storeType: null    // Level 2: convenience, supermarket...
+            });
 
-            // Form & Editing State
-            const editingId = ref(null); // 追蹤目前編輯的 ID，若為 null 則為新增模式
+            // Constants
+            const regions = ['台灣', '日本', '韓國', '歐美', '其他'];
+            const storeTypes = [
+                { value: 'convenience', label: '便利商店', icon: 'fa-solid fa-store', desc: '7-11, 全家, Lawson' },
+                { value: 'supermarket', label: '超市/大賣場', icon: 'fa-solid fa-cart-shopping', desc: '全聯, 家樂福, Aeon' },
+                { value: 'donki', label: '唐吉訶德/雜貨', icon: 'fa-solid fa-penguin', desc: 'Don Quijote, Kaldi' },
+                { value: 'organic', label: '有機/健康', icon: 'fa-solid fa-leaf', desc: '里仁, 聖德科斯' },
+                { value: 'drugstore', label: '藥妝店', icon: 'fa-solid fa-pills', desc: '松本清, Welcia' },
+                { value: 'other', label: '其他/網購', icon: 'fa-solid fa-box-open', desc: '地區小店, 網路' }
+            ];
+
+            // Form
+            const editingId = ref(null);
             const form = reactive({
                 name: '', 
                 region: '台灣', 
+                storeType: 'convenience', // New Field
                 category: '零食', 
                 location: '', 
                 price: null,
                 frontImage: null, 
                 ingredientImage: null,
-                dietary: 'no-gluten' // 預設無麩
+                dietary: 'no-gluten'
             });
             const showLocSuggestions = ref(false);
 
@@ -466,20 +515,15 @@
                 const customCfg = localStorage.getItem('gf_firebase_config');
                 const configToUse = customCfg ? JSON.parse(customCfg) : DEFAULT_CONFIG;
                 firebaseConfigInput.value = customCfg || JSON.stringify(DEFAULT_CONFIG, null, 2);
-                
                 initFirebase(configToUse);
             });
 
             const initFirebase = async (config) => {
                 try {
                     statusMsg.value = "";
-                    try {
-                        app = initializeApp(config); 
-                    } catch(e) { }
-                    
+                    try { app = initializeApp(config); } catch(e) { }
                     const auth = getAuth(app);
                     db = getFirestore(app);
-                    
                     await signInAnonymously(auth);
                     onAuthStateChanged(auth, (u) => {
                         user.value = u;
@@ -488,40 +532,134 @@
                     });
                 } catch(e) {
                     console.error("Init Error:", e);
-                    statusMsg.value = "連線異常 (請檢查設定)";
+                    statusMsg.value = "連線異常";
                 }
             };
 
-            const saveConfig = () => {
-                try {
-                    const cfg = JSON.parse(firebaseConfigInput.value);
-                    localStorage.setItem('gf_firebase_config', firebaseConfigInput.value);
-                    location.reload();
-                } catch(e) { alert("JSON 格式錯誤"); }
-            };
-
-            const resetToDefault = () => {
-                localStorage.removeItem('gf_firebase_config');
-                location.reload();
-            };
-
-            // Firestore Realtime Listener
             const loadProducts = () => {
                 loading.value = true;
                 const appIdStr = 'mymoney-8e727'; 
                 const q = query(collection(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products'), orderBy("timestamp", "desc"));
                 
                 onSnapshot(q, (snapshot) => {
-                    products.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    // Process products and try to infer storeType for old data
+                    products.value = snapshot.docs.map(doc => {
+                        const data = doc.data();
+                        return { 
+                            id: doc.id, 
+                            ...data,
+                            // Backwards compatibility: Infer storeType if missing
+                            storeType: data.storeType || inferStoreType(data.location)
+                        };
+                    });
                     loading.value = false;
-                }, (error) => {
-                    console.error("Snapshot error:", error);
-                    loading.value = false;
-                    statusMsg.value = "讀取失敗";
                 });
             };
 
-            // Image Compression
+            // Helper to guess store type from location string
+            const inferStoreType = (loc) => {
+                if (!loc) return 'other';
+                const l = loc.toLowerCase();
+                if (l.match(/7-11|seven|全家|family|萊爾富|ok|lawson|ministop/)) return 'convenience';
+                if (l.match(/全聯|px|家樂福|carrefour|大潤發|costco|aeon|超市|super/)) return 'supermarket';
+                if (l.match(/donki|唐吉|kaldi|咖樂迪|大創/)) return 'donki';
+                if (l.match(/里仁|聖德科斯|棉花田|organic|bio/)) return 'organic';
+                if (l.match(/松本清|藥妝|drug|welcia|cosme/)) return 'drugstore';
+                return 'other';
+            };
+
+            // Navigation Helpers
+            const resetView = () => {
+                navState.region = null;
+                navState.storeType = null;
+                searchQuery.value = '';
+            };
+
+            const getRegionCount = (reg) => products.value.filter(p => p.region === reg).length;
+            const getStoreTypeCount = (reg, type) => products.value.filter(p => p.region === reg && p.storeType === type).length;
+            const getStoreTypeLabel = (typeVal) => storeTypes.find(t => t.value === typeVal)?.label || typeVal;
+
+            // Filter Logic
+            const filteredProducts = computed(() => {
+                // Must have Region and StoreType selected to see products
+                if (!navState.region || !navState.storeType) return [];
+                
+                return products.value.filter(p => {
+                    const matchRegion = p.region === navState.region;
+                    const matchType = p.storeType === navState.storeType;
+                    const matchSearch = !searchQuery.value || (p.name + p.location).toLowerCase().includes(searchQuery.value.toLowerCase());
+                    return matchRegion && matchType && matchSearch;
+                });
+            });
+
+            // Form & Actions
+            const openUploadModal = () => {
+                editingId.value = null;
+                // Pre-fill region/type if user is currently browsing one
+                const defaultRegion = navState.region || '台灣';
+                const defaultType = navState.storeType || 'convenience';
+                
+                Object.assign(form, { 
+                    name: '', region: defaultRegion, storeType: defaultType, category: '零食', location: '', price: null, 
+                    frontImage: null, ingredientImage: null, dietary: 'no-gluten' 
+                });
+                showUpload.value = true;
+            };
+
+            const editProduct = (product) => {
+                editingId.value = product.id;
+                Object.assign(form, {
+                    name: product.name,
+                    region: product.region,
+                    storeType: product.storeType || inferStoreType(product.location), // Ensure we have a type
+                    category: product.category,
+                    location: product.location,
+                    price: product.price,
+                    frontImage: product.frontImage,
+                    ingredientImage: product.ingredientImage,
+                    dietary: product.dietary || 'no-gluten'
+                });
+                showUpload.value = true;
+            };
+
+            const submitProduct = async () => {
+                if(!form.name || !form.location || !form.frontImage || !form.ingredientImage) return alert("請填寫所有欄位");
+                if(!db || !user.value) return alert("未連線");
+
+                isSubmitting.value = true;
+                const appIdStr = 'mymoney-8e727';
+                const collectionRef = collection(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products');
+
+                try {
+                    const docData = { ...form, uploaderId: user.value.uid };
+                    if (editingId.value) {
+                        await updateDoc(doc(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products', editingId.value), {
+                            ...docData, updatedAt: serverTimestamp()
+                        });
+                        alert("更新成功");
+                    } else {
+                        await addDoc(collectionRef, { ...docData, timestamp: serverTimestamp() });
+                        alert("發布成功");
+                    }
+                    closeUpload();
+                    // Auto navigate to the new product's folder so user can see it
+                    navState.region = form.region;
+                    navState.storeType = form.storeType;
+                } catch(e) {
+                    alert("失敗: " + e.message);
+                } finally {
+                    isSubmitting.value = false;
+                }
+            };
+
+            const confirmDelete = async (id) => {
+                if(!confirm("確定刪除?")) return;
+                try {
+                    await deleteDoc(doc(db, 'artifacts', 'mymoney-8e727', 'public', 'data', 'gf_products', id));
+                } catch(e) { console.error(e); }
+            };
+
+            // Utils
             const handleImage = (e, field) => {
                 const file = e.target.files[0];
                 if(!file) return;
@@ -544,134 +682,24 @@
                 e.target.value = '';
             };
 
-            // Computed Helpers
-            const filteredProducts = computed(() => {
-                return products.value.filter(p => {
-                    const matchSearch = (p.name + p.location).toLowerCase().includes(searchQuery.value.toLowerCase());
-                    const matchRegion = !filter.region || filter.region === '全部' || p.region === filter.region;
-                    const matchCategory = !filter.category || p.category === filter.category;
-                    return matchSearch && matchRegion && matchCategory;
-                });
-            });
-
-            const similarProducts = computed(() => {
-                if(!form.name || form.name.length < 2) return [];
-                return products.value.filter(p => p.name.includes(form.name) && p.id !== editingId.value).slice(0, 3);
-            });
-
+            const closeUpload = () => showUpload.value = false;
+            const viewImage = (src) => viewingImg.value = src;
+            const saveConfig = () => { localStorage.setItem('gf_firebase_config', firebaseConfigInput.value); location.reload(); };
+            const resetToDefault = () => { localStorage.removeItem('gf_firebase_config'); location.reload(); };
+            
             const suggestedLocations = computed(() => {
                 const locs = new Set(products.value.map(p => p.location));
                 return Array.from(locs).filter(l => l.includes(form.location || '')).slice(0, 5);
             });
-            
-            const hideSuggestions = () => {
-                setTimeout(() => {
-                    showLocSuggestions.value = false;
-                }, 200);
-            };
-
-            // --- 操作功能區 ---
-
-            // 開啟新增模式
-            const openUploadModal = () => {
-                editingId.value = null; // 清除 ID 表示新增
-                Object.assign(form, { 
-                    name: '', region: '台灣', category: '零食', location: '', price: null, 
-                    frontImage: null, ingredientImage: null, dietary: 'no-gluten' 
-                });
-                showUpload.value = true;
-            };
-
-            // 開啟編輯模式
-            const editProduct = (product) => {
-                editingId.value = product.id;
-                Object.assign(form, {
-                    name: product.name,
-                    region: product.region,
-                    category: product.category,
-                    location: product.location,
-                    price: product.price,
-                    frontImage: product.frontImage,
-                    ingredientImage: product.ingredientImage,
-                    dietary: product.dietary || 'no-gluten' // 相容舊資料
-                });
-                showUpload.value = true;
-            };
-
-            const closeUpload = () => showUpload.value = false;
-
-            // 送出 (新增或更新)
-            const submitProduct = async () => {
-                if(!form.name || !form.location || !form.frontImage || !form.ingredientImage) {
-                    alert("請填寫所有必填欄位並上傳照片");
-                    return;
-                }
-                if(!db || !user.value) {
-                    alert("未連線至雲端");
-                    return;
-                }
-
-                isSubmitting.value = true;
-                const appIdStr = 'mymoney-8e727';
-                const collectionRef = collection(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products');
-
-                try {
-                    const docData = {
-                        ...form,
-                        uploaderId: user.value.uid, // 總是更新為最後編輯者，或是可以保留原作者
-                        // 若是編輯，可以決定是否更新時間戳，這裡我們不更新 timestamp 以保留原始發布時間，或新增 updatedAt
-                    };
-
-                    if (editingId.value) {
-                        // 更新模式
-                        const docRef = doc(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products', editingId.value);
-                        await updateDoc(docRef, {
-                            ...docData,
-                            updatedAt: serverTimestamp() // 紀錄更新時間
-                        });
-                        alert("更新成功！");
-                    } else {
-                        // 新增模式
-                        await addDoc(collectionRef, {
-                            ...docData,
-                            timestamp: serverTimestamp()
-                        });
-                        alert("發布成功！感謝您的分享 ❤️");
-                    }
-                    
-                    closeUpload();
-                } catch(e) {
-                    console.error(e);
-                    alert((editingId.value ? "更新" : "上傳") + "失敗: " + e.message);
-                } finally {
-                    isSubmitting.value = false;
-                }
-            };
-
-            // 刪除功能
-            const confirmDelete = async (id) => {
-                if(!confirm("確定要刪除這個分享嗎？此動作無法復原。")) return;
-                
-                try {
-                    const appIdStr = 'mymoney-8e727';
-                    await deleteDoc(doc(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products', id));
-                } catch(e) {
-                    console.error(e);
-                    alert("刪除失敗");
-                }
-            };
-
-            const viewImage = (src) => viewingImg.value = src;
-            const formatDate = (ts) => ts ? new Date(ts.seconds * 1000).toLocaleDateString() : '剛剛';
-            const checkDuplicateName = () => {}; 
+            const hideSuggestions = () => setTimeout(() => showLocSuggestions.value = false, 200);
 
             return {
-                showUpload, showConfig, viewingImg, loading, isSubmitting, statusMsg,
-                firebaseConfigInput, searchQuery, filter, regions, form, editingId,
-                filteredProducts, similarProducts, suggestedLocations, showLocSuggestions, hideSuggestions,
-                saveConfig, resetToDefault, handleImage, submitProduct, 
-                openUploadModal, editProduct, confirmDelete, closeUpload, 
-                viewImage, formatDate, checkDuplicateName
+                showUpload, showConfig, viewingImg, loading, isSubmitting, statusMsg, firebaseConfigInput,
+                navState, regions, storeTypes, // Navigation
+                filteredProducts, suggestedLocations, showLocSuggestions, hideSuggestions, searchQuery,
+                form, editingId,
+                resetView, getRegionCount, getStoreTypeCount, getStoreTypeLabel,
+                saveConfig, resetToDefault, handleImage, submitProduct, openUploadModal, editProduct, confirmDelete, closeUpload, viewImage
             };
         }
     }).mount('#app');
@@ -679,9 +707,9 @@
 
 <style>
     .animate-slide-up { animation: slideUp 0.3s ease-out; }
-    @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
 
 </body>
