@@ -1,326 +1,688 @@
-import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  onAuthStateChanged,
-  signInWithCustomToken
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  deleteDoc, 
-  updateDoc, 
-  doc, 
-  onSnapshot, 
-  query, 
-  orderBy, 
-  serverTimestamp 
-} from 'firebase/firestore';
-import { 
-  Trash2, 
-  Edit, 
-  Plus, 
-  Save, 
-  X, 
-  Coffee, 
-  Wheat, 
-  WheatOff, 
-  MilkOff,
-  Check
-} from 'lucide-react';
-
-// --- Firebase 設定與初始化 ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [products, setProducts] = useState([]);
-  
-  // 表單狀態
-  const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
-  const [dietary, setDietary] = useState('normal'); // 預設為一般
-  
-  // 編輯模式狀態
-  const [editingId, setEditingId] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-
-  // 1. 初始化登入
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (err) {
-        console.error("Auth error:", err);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
-    return () => unsubscribe();
-  }, []);
-
-  // 2. 監聽商品資料 (讀取)
-  useEffect(() => {
-    if (!user) return;
-
-    // 使用公開集合，方便協作測試
-    const q = query(
-      collection(db, 'artifacts', appId, 'public', 'data', 'products'),
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setProducts(items);
-    }, (err) => {
-      console.error("Snapshot error:", err);
-      setErrorMsg("讀取資料失敗");
-    });
-
-    return () => unsubscribe();
-  }, [user]);
-
-  // 重置表單
-  const resetForm = () => {
-    setName('');
-    setPrice('');
-    setDietary('normal');
-    setEditingId(null);
-    setErrorMsg('');
-  };
-
-  // 3. 新增或更新商品
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!name || !price) {
-      setErrorMsg("請填寫名稱與價格");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const productData = {
-        name,
-        price: Number(price),
-        dietary, // 儲存飲食標籤
-        updatedAt: serverTimestamp()
-      };
-
-      const collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'products');
-
-      if (editingId) {
-        // 更新模式
-        const docRef = doc(collectionRef, editingId);
-        await updateDoc(docRef, productData);
-      } else {
-        // 新增模式
-        await addDoc(collectionRef, {
-          ...productData,
-          createdAt: serverTimestamp()
-        });
-      }
-      resetForm();
-    } catch (err) {
-      console.error("Save error:", err);
-      setErrorMsg("儲存失敗，請稍後再試");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 4. 刪除商品
-  const handleDelete = async (id) => {
-    if (!confirm("確定要刪除這個商品嗎？")) return;
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>無麩質美食雷達 | GF Community</title>
     
-    try {
-      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', id);
-      await deleteDoc(docRef);
-      // 如果正在編輯這個項目，取消編輯狀態
-      if (editingId === id) resetForm();
-    } catch (err) {
-      console.error("Delete error:", err);
-      setErrorMsg("刪除失敗");
-    }
-  };
+    <!-- 核心函式庫 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
 
-  // 5. 啟動編輯模式
-  const startEdit = (product) => {
-    setName(product.name);
-    setPrice(product.price);
-    setDietary(product.dietary || 'normal');
-    setEditingId(product.id);
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // 捲動到上方表單
-  };
+    <style>
+        body {
+            font-family: 'M PLUS Rounded 1c', 'Noto Sans TC', sans-serif;
+            background-color: #fff7ed; /* 溫暖的米色背景 */
+            color: #431407;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 4px 20px rgba(251, 146, 60, 0.08);
+            border: 1px solid #ffedd5;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-main {
+            background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(234, 88, 12, 0.3);
+            transition: transform 0.2s;
+        }
+        .btn-main:active { transform: scale(0.95); }
 
-  // 輔助函式：取得飲食標籤的顯示文字與樣式
-  const getDietaryBadge = (type) => {
-    switch (type) {
-      case 'no-dairy':
-        return <span className="flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-full"><MilkOff size={12} /> 無奶</span>;
-      case 'no-gluten':
-        return <span className="flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-100 px-2 py-1 rounded-full"><WheatOff size={12} /> 無麩</span>;
-      case 'double-free':
-        return <span className="flex items-center gap-1 text-xs font-bold text-purple-600 bg-purple-100 px-2 py-1 rounded-full"><Check size={12} /> 無奶麩</span>;
-      default:
-        return <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">一般</span>;
-    }
-  };
+        .input-std {
+            background: #fff;
+            border: 2px solid #fed7aa;
+            border-radius: 16px;
+            padding: 12px 16px;
+            width: 100%;
+            outline: none;
+            transition: all 0.3s;
+        }
+        .input-std:focus {
+            border-color: #f97316;
+            box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1);
+        }
 
-  return (
-    <div className="min-h-screen bg-slate-50 p-4 font-sans text-slate-800">
-      <div className="max-w-2xl mx-auto">
-        <header className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center justify-center gap-2">
-            <Coffee className="text-emerald-600" />
-            商品管理後台
-          </h1>
-          <p className="text-slate-500 mt-2">新增、編輯與管理您的菜單品項</p>
-        </header>
+        .category-chip {
+            padding: 6px 14px;
+            border-radius: 99px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        .category-chip.active {
+            background-color: #ffedd5;
+            color: #c2410c;
+            border-color: #fdba74;
+        }
+        .category-chip.inactive {
+            background-color: white;
+            color: #9ca3af;
+            border-color: #e5e7eb;
+        }
 
-        {/* --- 表單區域 --- */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8 transition-all">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              {editingId ? <Edit size={20} className="text-blue-500" /> : <Plus size={20} className="text-emerald-500" />}
-              {editingId ? '編輯商品' : '新增商品'}
-            </h2>
-            {editingId && (
-              <button onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
-                <X size={14} /> 取消編輯
-              </button>
-            )}
-          </div>
+        /* 圖片容器 */
+        .img-box {
+            width: 100%;
+            height: 160px;
+            background-color: #f3f4f6;
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #d1d5db;
+            cursor: pointer;
+        }
+        .img-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">品項名稱</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="例如：燕麥奶拿鐵"
-                  className="w-full rounded-lg border-slate-300 border p-2.5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">價格</label>
-                <input
-                  type="number"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  placeholder="0"
-                  className="w-full rounded-lg border-slate-300 border p-2.5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                  required
-                  min="0"
-                />
-              </div>
+        /* 搜尋建議下拉 */
+        .suggestions {
+            position: absolute;
+            background: white;
+            border: 1px solid #fed7aa;
+            border-radius: 12px;
+            width: 100%;
+            max-height: 150px;
+            overflow-y: auto;
+            z-index: 50;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            margin-top: 4px;
+        }
+        .suggestion-item {
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .suggestion-item:hover { background-color: #fff7ed; color: #ea580c; }
+        
+        /* 飲食標籤選單樣式 */
+        .diet-option {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .diet-option.active {
+            border-color: #fb923c;
+            background-color: #fff7ed;
+            color: #c2410c;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app" class="flex flex-col h-screen max-w-md mx-auto relative bg-[#fff7ed]">
+    
+    <!-- 頂部導航 -->
+    <header class="px-6 pt-6 pb-4 bg-white sticky top-0 z-20 shadow-sm rounded-b-[30px]">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-2xl font-bold text-orange-600 flex items-center gap-2">
+                <i class="fa-solid fa-wheat-awn-circle-exclamation"></i>
+                GF Radar
+            </h1>
+            <div class="flex items-center gap-2">
+                <span v-if="statusMsg" class="text-[10px] px-2 py-1 rounded-full bg-green-100 text-green-600 font-bold animate-pulse">{{ statusMsg }}</span>
+                <button @click="showConfig = true" class="w-8 h-8 rounded-full bg-orange-50 text-orange-400 flex items-center justify-center">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
             </div>
-
-            {/* 新增：飲食選項 */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">飲食標籤</label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <label className={`cursor-pointer border rounded-lg p-2 flex flex-col items-center justify-center transition-all ${dietary === 'normal' ? 'bg-slate-100 border-slate-400 ring-1 ring-slate-400' : 'hover:bg-slate-50 border-slate-200'}`}>
-                  <input type="radio" name="dietary" value="normal" checked={dietary === 'normal'} onChange={(e) => setDietary(e.target.value)} className="sr-only" />
-                  <span className="text-sm font-medium">一般</span>
-                </label>
-                
-                <label className={`cursor-pointer border rounded-lg p-2 flex flex-col items-center justify-center transition-all ${dietary === 'no-dairy' ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-400 text-blue-700' : 'hover:bg-blue-50/50 border-slate-200'}`}>
-                  <input type="radio" name="dietary" value="no-dairy" checked={dietary === 'no-dairy'} onChange={(e) => setDietary(e.target.value)} className="sr-only" />
-                  <div className="flex items-center gap-1"><MilkOff size={14}/> <span className="text-sm font-medium">無奶</span></div>
-                </label>
-
-                <label className={`cursor-pointer border rounded-lg p-2 flex flex-col items-center justify-center transition-all ${dietary === 'no-gluten' ? 'bg-amber-50 border-amber-400 ring-1 ring-amber-400 text-amber-700' : 'hover:bg-amber-50/50 border-slate-200'}`}>
-                  <input type="radio" name="dietary" value="no-gluten" checked={dietary === 'no-gluten'} onChange={(e) => setDietary(e.target.value)} className="sr-only" />
-                  <div className="flex items-center gap-1"><WheatOff size={14}/> <span className="text-sm font-medium">無麩</span></div>
-                </label>
-
-                <label className={`cursor-pointer border rounded-lg p-2 flex flex-col items-center justify-center transition-all ${dietary === 'double-free' ? 'bg-purple-50 border-purple-400 ring-1 ring-purple-400 text-purple-700' : 'hover:bg-purple-50/50 border-slate-200'}`}>
-                  <input type="radio" name="dietary" value="double-free" checked={dietary === 'double-free'} onChange={(e) => setDietary(e.target.value)} className="sr-only" />
-                  <div className="flex items-center gap-1"><Check size={14}/> <span className="text-sm font-medium">無奶麩</span></div>
-                </label>
-              </div>
-            </div>
-
-            {errorMsg && <div className="text-red-500 text-sm bg-red-50 p-2 rounded">{errorMsg}</div>}
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className={`w-full py-3 px-4 rounded-lg font-bold text-white shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 ${
-                editingId 
-                  ? 'bg-blue-600 hover:bg-blue-700' 
-                  : 'bg-emerald-600 hover:bg-emerald-700'
-              } disabled:opacity-50`}
-            >
-              {isLoading ? '處理中...' : editingId ? <><Save size={18} /> 更新商品資訊</> : <><Plus size={18} /> 新增商品</>}
-            </button>
-          </form>
         </div>
 
-        {/* --- 列表區域 --- */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-slate-800 px-1">目前商品 ({products.length})</h3>
-          
-          {products.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-dashed border-slate-300">
-              <p className="text-slate-400">目前沒有商品，請由上方新增</p>
+        <!-- 搜尋與篩選區 -->
+        <div class="space-y-3">
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i>
+                <input type="text" v-model="searchQuery" placeholder="搜尋商品、地點..." class="input-std pl-10 py-2.5 text-sm">
             </div>
-          ) : (
-            <div className="grid gap-4">
-              {products.map((item) => (
-                <div 
-                  key={item.id} 
-                  className={`bg-white p-4 rounded-xl border transition-all flex justify-between items-center ${
-                    editingId === item.id ? 'border-blue-400 ring-1 ring-blue-400 shadow-md' : 'border-slate-200 shadow-sm hover:shadow-md'
-                  }`}
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-bold text-lg text-slate-800">{item.name}</h4>
-                      {getDietaryBadge(item.dietary)}
-                    </div>
-                    <p className="text-slate-500 font-mono text-lg">${item.price}</p>
-                  </div>
+            
+            <!-- 地區篩選 -->
+            <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                <button v-for="r in regions" :key="r" 
+                    @click="filter.region = filter.region === r ? '' : r"
+                    :class="['category-chip whitespace-nowrap', filter.region === r || (!filter.region && r === '全部') ? 'active' : 'inactive']">
+                    {{ r === '' ? '全部地區' : r }}
+                </button>
+            </div>
+        </div>
+    </header>
 
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => startEdit(item)}
-                      className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="編輯"
-                    >
-                      <Edit size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="刪除"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
+    <!-- 主要列表區 -->
+    <main class="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-24">
+        
+        <div v-if="loading" class="text-center py-10 text-gray-400">
+            <i class="fa-solid fa-circle-notch fa-spin text-2xl mb-2"></i>
+            <p class="text-sm">正在同步社群資料...</p>
+        </div>
+
+        <div v-else-if="filteredProducts.length === 0" class="text-center py-20 text-gray-400">
+            <i class="fa-solid fa-cookie-bite text-4xl mb-3 text-orange-200"></i>
+            <p>目前沒有相關商品</p>
+            <p class="text-xs mt-1">成為第一個分享的人吧！</p>
+        </div>
+
+        <div v-for="product in filteredProducts" :key="product.id" class="card p-4 flex flex-col gap-3 group relative overflow-hidden">
+            <!-- 區域標籤 -->
+            <div class="absolute top-0 right-0 bg-orange-100 text-orange-600 text-[10px] font-bold px-3 py-1 rounded-bl-xl z-10">
+                {{ product.region }}
+            </div>
+
+            <!-- 商品頭部 -->
+            <div class="flex gap-3 relative">
+                <div class="w-20 h-20 rounded-xl bg-gray-100 shrink-0 overflow-hidden cursor-pointer" @click="viewImage(product.frontImage)">
+                    <img :src="product.frontImage" class="w-full h-full object-cover">
                 </div>
-              ))}
+                <div class="flex-1 min-w-0 pr-8"> <!-- pr-8 留空間給操作按鈕 -->
+                    <div class="flex flex-col">
+                        <h3 class="font-bold text-slate-800 text-lg leading-tight truncate mb-1">{{ product.name }}</h3>
+                        
+                        <!-- 飲食標籤顯示 -->
+                        <div class="mb-1">
+                            <span v-if="product.dietary === 'no-dairy'" class="inline-flex items-center gap-1 text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold">
+                                <i class="fa-solid fa-cow"></i> 無奶
+                            </span>
+                            <span v-else-if="product.dietary === 'no-gluten'" class="inline-flex items-center gap-1 text-[10px] bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-bold">
+                                <i class="fa-solid fa-wheat-awn-circle-exclamation"></i> 無麩
+                            </span>
+                            <span v-else-if="product.dietary === 'double-free'" class="inline-flex items-center gap-1 text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-bold">
+                                <i class="fa-solid fa-check-double"></i> 無奶麩
+                            </span>
+                        </div>
+
+                        <div class="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
+                            <span class="bg-gray-100 px-2 py-0.5 rounded-md">{{ product.category }}</span>
+                            <span class="bg-gray-100 px-2 py-0.5 rounded-md text-orange-500 font-bold truncate max-w-[120px]">
+                                <i class="fa-solid fa-location-dot mr-1"></i>{{ product.location }}
+                            </span>
+                        </div>
+                        <div class="mt-2 font-bold text-orange-600">
+                            約 NT$ {{ product.price }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 編輯/刪除按鈕 (絕對定位在右上角下面一點，或是彈性佈局) -->
+                <div class="absolute right-0 top-6 flex flex-col gap-2">
+                   <button @click="editProduct(product)" class="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-100 transition shadow-sm">
+                       <i class="fa-solid fa-pen text-xs"></i>
+                   </button>
+                   <button @click="confirmDelete(product.id)" class="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition shadow-sm">
+                       <i class="fa-solid fa-trash text-xs"></i>
+                   </button>
+                </div>
             </div>
-          )}
+
+            <!-- 成分表展開 -->
+            <div class="bg-orange-50/50 rounded-xl p-3 border border-orange-100 cursor-pointer hover:bg-orange-50 transition" @click="viewImage(product.ingredientImage)">
+                <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                    <i class="fa-solid fa-list-check text-orange-400"></i>
+                    <span>成分表 (點擊放大檢查)</span>
+                </div>
+                <div class="h-16 w-full rounded-lg overflow-hidden relative">
+                    <img :src="product.ingredientImage" class="w-full h-full object-cover opacity-80 hover:opacity-100 transition">
+                    <div class="absolute inset-0 flex items-center justify-center bg-black/5">
+                        <i class="fa-solid fa-magnifying-glass-plus text-white drop-shadow-md"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-[10px] text-gray-300 text-right">
+                由 {{ product.uploaderId ? product.uploaderId.substring(0,6) + '...' : '匿名旅人' }} 分享於 {{ formatDate(product.timestamp) }}
+            </div>
         </div>
-      </div>
+
+    </main>
+
+    <!-- FAB -->
+    <button @click="openUploadModal" class="absolute bottom-6 right-6 w-14 h-14 rounded-full btn-main flex items-center justify-center text-2xl shadow-xl z-20 hover:scale-110 transition-transform">
+        <i class="fa-solid fa-plus"></i>
+    </button>
+
+    <!-- 上傳/編輯 Modal -->
+    <div v-if="showUpload" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeUpload"></div>
+        <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl p-6 relative z-50 max-h-[95vh] overflow-y-auto flex flex-col shadow-2xl animate-slide-up">
+            
+            <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-4"></div>
+            <h2 class="text-xl font-bold text-center mb-6 text-orange-600">
+                {{ editingId ? '編輯商品資訊' : '分享無麩質好物' }}
+            </h2>
+
+            <div class="space-y-5">
+                
+                <!-- 1. 照片上傳區 -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                        <label class="text-xs font-bold text-gray-500">正面包裝照 <span class="text-red-400">*</span></label>
+                        <div class="img-box" @click="$refs.frontInput.click()">
+                            <img v-if="form.frontImage" :src="form.frontImage">
+                            <div v-else class="text-gray-300 flex flex-col items-center">
+                                <i class="fa-solid fa-camera text-2xl mb-1"></i>
+                                <span class="text-xs">點擊上傳</span>
+                            </div>
+                        </div>
+                        <input type="file" ref="frontInput" accept="image/*" class="hidden" @change="e => handleImage(e, 'frontImage')">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-xs font-bold text-gray-500">成分表特寫 <span class="text-red-400">*</span></label>
+                        <div class="img-box" @click="$refs.ingInput.click()">
+                            <img v-if="form.ingredientImage" :src="form.ingredientImage">
+                            <div v-else class="text-gray-300 flex flex-col items-center">
+                                <i class="fa-solid fa-file-invoice text-2xl mb-1"></i>
+                                <span class="text-xs">確認無麩質</span>
+                            </div>
+                        </div>
+                        <input type="file" ref="ingInput" accept="image/*" class="hidden" @change="e => handleImage(e, 'ingredientImage')">
+                    </div>
+                </div>
+
+                <!-- 新增：飲食標籤選擇區 -->
+                <div>
+                    <label class="text-xs font-bold text-gray-500 mb-2 block">飲食標籤 <span class="text-red-400">*</span></label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div @click="form.dietary = 'no-gluten'" :class="['diet-option', form.dietary === 'no-gluten' ? 'active' : 'bg-gray-50']">
+                            <div class="text-xl mb-1"><i class="fa-solid fa-wheat-awn-circle-exclamation"></i></div>
+                            <div class="text-xs font-bold">無麩</div>
+                        </div>
+                        <div @click="form.dietary = 'no-dairy'" :class="['diet-option', form.dietary === 'no-dairy' ? 'active' : 'bg-gray-50']">
+                            <div class="text-xl mb-1"><i class="fa-solid fa-cow"></i></div>
+                            <div class="text-xs font-bold">無奶</div>
+                        </div>
+                        <div @click="form.dietary = 'double-free'" :class="['diet-option', form.dietary === 'double-free' ? 'active' : 'bg-gray-50']">
+                            <div class="text-xl mb-1"><i class="fa-solid fa-check-double"></i></div>
+                            <div class="text-xs font-bold">無奶麩</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. 基本資訊 -->
+                <div class="relative">
+                    <label class="text-xs font-bold text-gray-500 mb-1">商品名稱 <span class="text-red-400">*</span></label>
+                    <input type="text" v-model="form.name" class="input-std" placeholder="例如：米製義大利麵" @input="checkDuplicateName">
+                    <!-- 類似商品提醒 -->
+                    <div v-if="similarProducts.length > 0 && !editingId" class="suggestions">
+                        <div class="bg-orange-50 p-2 text-xs text-orange-600 font-bold border-b border-orange-100">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i> 社群內已有類似商品：
+                        </div>
+                        <div v-for="p in similarProducts" :key="p.id" class="suggestion-item text-gray-500">
+                            {{ p.name }} ({{ p.location }})
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 mb-1">地區</label>
+                        <select v-model="form.region" class="input-std bg-white">
+                            <option value="台灣">🇹🇼 台灣</option>
+                            <option value="日本">🇯🇵 日本</option>
+                            <option value="韓國">🇰🇷 韓國</option>
+                            <option value="歐美">🇺🇸 歐美</option>
+                            <option value="其他">🌏 其他</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 mb-1">分類</label>
+                        <select v-model="form.category" class="input-std bg-white">
+                            <option value="零食">🍪 零食/點心</option>
+                            <option value="主食">🍜 麵/飯/麵包</option>
+                            <option value="醬料">🥣 醬料/調味</option>
+                            <option value="飲品">🥤 飲料/酒</option>
+                            <option value="其他">📦 其他</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 3. 購買資訊 -->
+                <div class="relative">
+                    <label class="text-xs font-bold text-gray-500 mb-1">購買地點/店鋪 <span class="text-red-400">*</span></label>
+                    <input type="text" v-model="form.location" class="input-std" placeholder="例如：7-11, 全聯, Donki..." @focus="showLocSuggestions=true" @blur="hideSuggestions">
+                    <!-- 地點建議 -->
+                    <div v-if="showLocSuggestions" class="suggestions">
+                        <div v-for="loc in suggestedLocations" :key="loc" class="suggestion-item" @click="form.location = loc">
+                            {{ loc }}
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-gray-500 mb-1">大概金額 (台幣)</label>
+                    <input type="number" v-model.number="form.price" class="input-std font-mono text-orange-600 font-bold" placeholder="0">
+                </div>
+
+            </div>
+
+            <div class="mt-8 flex gap-3">
+                <button @click="closeUpload" class="flex-1 py-3 rounded-xl border-2 border-gray-100 text-gray-400 font-bold">取消</button>
+                <button @click="submitProduct" class="flex-[2] py-3 rounded-xl btn-main font-bold" :disabled="isSubmitting">
+                    {{ isSubmitting ? '處理中...' : (editingId ? '更新資訊' : '發布分享') }}
+                </button>
+            </div>
+        </div>
     </div>
-  );
-}
+
+    <!-- 設定 Firebase (隱藏式) -->
+    <div v-if="showConfig" class="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/80">
+        <div class="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+            <h3 class="font-bold text-lg mb-4 text-slate-800">連線設定 (進階)</h3>
+            <p class="text-xs text-gray-500 mb-3">若您想連結自己的資料庫，可在此輸入 Config。若留空則使用預設公用資料庫。</p>
+            <textarea v-model="firebaseConfigInput" class="w-full h-32 border border-gray-300 rounded-xl p-3 text-xs font-mono bg-gray-50 mb-4" placeholder='{ "apiKey": "...", ... }'></textarea>
+            <div class="flex gap-2">
+                <button @click="showConfig = false" class="flex-1 py-2 rounded-lg border border-gray-200">關閉</button>
+                <button @click="saveConfig" class="flex-1 py-2 rounded-lg bg-slate-800 text-white">儲存並連線</button>
+            </div>
+            <button @click="resetToDefault" class="w-full mt-2 text-xs text-orange-400 underline">重置為預設公用庫</button>
+        </div>
+    </div>
+
+    <!-- 圖片放大 -->
+    <div v-if="viewingImg" class="fixed inset-0 z-[70] bg-black/90 flex flex-col justify-center items-center p-4" @click="viewingImg=null">
+        <img :src="viewingImg" class="max-w-full max-h-[80vh] rounded-lg shadow-2xl">
+        <p class="text-white/50 text-sm mt-4">點擊任意處關閉</p>
+    </div>
+
+</div>
+
+<!-- Firebase SDK -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { 
+        getFirestore, 
+        collection, 
+        addDoc, 
+        updateDoc, 
+        deleteDoc, 
+        doc,
+        onSnapshot, 
+        query, 
+        orderBy, 
+        serverTimestamp 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // 預設公用資料庫 (Public Demo)
+    const DEFAULT_CONFIG = {
+        apiKey: "AIzaSyBMZkTTRKgogrkSLfwrnmmMcUvZk5rSJ9w", 
+        authDomain: "mymoney-8e727.firebaseapp.com",
+        projectId: "mymoney-8e727",
+        storageBucket: "mymoney-8e727.firebasestorage.app",
+        messagingSenderId: "697114335542",
+        appId: "1:697114335542:web:4036b6b490f028efcdbb97"
+    };
+
+    const { createApp, ref, reactive, computed, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            const showUpload = ref(false);
+            const showConfig = ref(false);
+            const viewingImg = ref(null);
+            const loading = ref(false);
+            const isSubmitting = ref(false);
+            const statusMsg = ref('');
+            const firebaseConfigInput = ref('');
+            
+            // Data
+            const products = ref([]);
+            const searchQuery = ref('');
+            const filter = reactive({ region: '', category: '' });
+            const user = ref(null);
+            const regions = ['台灣', '日本', '韓國', '歐美', '其他'];
+
+            // Form & Editing State
+            const editingId = ref(null); // 追蹤目前編輯的 ID，若為 null 則為新增模式
+            const form = reactive({
+                name: '', 
+                region: '台灣', 
+                category: '零食', 
+                location: '', 
+                price: null,
+                frontImage: null, 
+                ingredientImage: null,
+                dietary: 'no-gluten' // 預設無麩
+            });
+            const showLocSuggestions = ref(false);
+
+            // Firebase refs
+            let db = null;
+            let app = null;
+
+            onMounted(() => {
+                const customCfg = localStorage.getItem('gf_firebase_config');
+                const configToUse = customCfg ? JSON.parse(customCfg) : DEFAULT_CONFIG;
+                firebaseConfigInput.value = customCfg || JSON.stringify(DEFAULT_CONFIG, null, 2);
+                
+                initFirebase(configToUse);
+            });
+
+            const initFirebase = async (config) => {
+                try {
+                    statusMsg.value = "";
+                    try {
+                        app = initializeApp(config); 
+                    } catch(e) { }
+                    
+                    const auth = getAuth(app);
+                    db = getFirestore(app);
+                    
+                    await signInAnonymously(auth);
+                    onAuthStateChanged(auth, (u) => {
+                        user.value = u;
+                        statusMsg.value = "雲端已連線";
+                        loadProducts();
+                    });
+                } catch(e) {
+                    console.error("Init Error:", e);
+                    statusMsg.value = "連線異常 (請檢查設定)";
+                }
+            };
+
+            const saveConfig = () => {
+                try {
+                    const cfg = JSON.parse(firebaseConfigInput.value);
+                    localStorage.setItem('gf_firebase_config', firebaseConfigInput.value);
+                    location.reload();
+                } catch(e) { alert("JSON 格式錯誤"); }
+            };
+
+            const resetToDefault = () => {
+                localStorage.removeItem('gf_firebase_config');
+                location.reload();
+            };
+
+            // Firestore Realtime Listener
+            const loadProducts = () => {
+                loading.value = true;
+                const appIdStr = 'mymoney-8e727'; 
+                const q = query(collection(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products'), orderBy("timestamp", "desc"));
+                
+                onSnapshot(q, (snapshot) => {
+                    products.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    loading.value = false;
+                }, (error) => {
+                    console.error("Snapshot error:", error);
+                    loading.value = false;
+                    statusMsg.value = "讀取失敗";
+                });
+            };
+
+            // Image Compression
+            const handleImage = (e, field) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const img = new Image();
+                    img.src = evt.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        const MAX_WIDTH = 800;
+                        let w = img.width, h = img.height;
+                        if(w > MAX_WIDTH) { h *= MAX_WIDTH/w; w = MAX_WIDTH; }
+                        canvas.width = w; canvas.height = h;
+                        ctx.drawImage(img, 0, 0, w, h);
+                        form[field] = canvas.toDataURL('image/jpeg', 0.6);
+                    }
+                };
+                reader.readAsDataURL(file);
+                e.target.value = '';
+            };
+
+            // Computed Helpers
+            const filteredProducts = computed(() => {
+                return products.value.filter(p => {
+                    const matchSearch = (p.name + p.location).toLowerCase().includes(searchQuery.value.toLowerCase());
+                    const matchRegion = !filter.region || filter.region === '全部' || p.region === filter.region;
+                    const matchCategory = !filter.category || p.category === filter.category;
+                    return matchSearch && matchRegion && matchCategory;
+                });
+            });
+
+            const similarProducts = computed(() => {
+                if(!form.name || form.name.length < 2) return [];
+                return products.value.filter(p => p.name.includes(form.name) && p.id !== editingId.value).slice(0, 3);
+            });
+
+            const suggestedLocations = computed(() => {
+                const locs = new Set(products.value.map(p => p.location));
+                return Array.from(locs).filter(l => l.includes(form.location || '')).slice(0, 5);
+            });
+            
+            const hideSuggestions = () => {
+                setTimeout(() => {
+                    showLocSuggestions.value = false;
+                }, 200);
+            };
+
+            // --- 操作功能區 ---
+
+            // 開啟新增模式
+            const openUploadModal = () => {
+                editingId.value = null; // 清除 ID 表示新增
+                Object.assign(form, { 
+                    name: '', region: '台灣', category: '零食', location: '', price: null, 
+                    frontImage: null, ingredientImage: null, dietary: 'no-gluten' 
+                });
+                showUpload.value = true;
+            };
+
+            // 開啟編輯模式
+            const editProduct = (product) => {
+                editingId.value = product.id;
+                Object.assign(form, {
+                    name: product.name,
+                    region: product.region,
+                    category: product.category,
+                    location: product.location,
+                    price: product.price,
+                    frontImage: product.frontImage,
+                    ingredientImage: product.ingredientImage,
+                    dietary: product.dietary || 'no-gluten' // 相容舊資料
+                });
+                showUpload.value = true;
+            };
+
+            const closeUpload = () => showUpload.value = false;
+
+            // 送出 (新增或更新)
+            const submitProduct = async () => {
+                if(!form.name || !form.location || !form.frontImage || !form.ingredientImage) {
+                    alert("請填寫所有必填欄位並上傳照片");
+                    return;
+                }
+                if(!db || !user.value) {
+                    alert("未連線至雲端");
+                    return;
+                }
+
+                isSubmitting.value = true;
+                const appIdStr = 'mymoney-8e727';
+                const collectionRef = collection(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products');
+
+                try {
+                    const docData = {
+                        ...form,
+                        uploaderId: user.value.uid, // 總是更新為最後編輯者，或是可以保留原作者
+                        // 若是編輯，可以決定是否更新時間戳，這裡我們不更新 timestamp 以保留原始發布時間，或新增 updatedAt
+                    };
+
+                    if (editingId.value) {
+                        // 更新模式
+                        const docRef = doc(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products', editingId.value);
+                        await updateDoc(docRef, {
+                            ...docData,
+                            updatedAt: serverTimestamp() // 紀錄更新時間
+                        });
+                        alert("更新成功！");
+                    } else {
+                        // 新增模式
+                        await addDoc(collectionRef, {
+                            ...docData,
+                            timestamp: serverTimestamp()
+                        });
+                        alert("發布成功！感謝您的分享 ❤️");
+                    }
+                    
+                    closeUpload();
+                } catch(e) {
+                    console.error(e);
+                    alert((editingId.value ? "更新" : "上傳") + "失敗: " + e.message);
+                } finally {
+                    isSubmitting.value = false;
+                }
+            };
+
+            // 刪除功能
+            const confirmDelete = async (id) => {
+                if(!confirm("確定要刪除這個分享嗎？此動作無法復原。")) return;
+                
+                try {
+                    const appIdStr = 'mymoney-8e727';
+                    await deleteDoc(doc(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products', id));
+                } catch(e) {
+                    console.error(e);
+                    alert("刪除失敗");
+                }
+            };
+
+            const viewImage = (src) => viewingImg.value = src;
+            const formatDate = (ts) => ts ? new Date(ts.seconds * 1000).toLocaleDateString() : '剛剛';
+            const checkDuplicateName = () => {}; 
+
+            return {
+                showUpload, showConfig, viewingImg, loading, isSubmitting, statusMsg,
+                firebaseConfigInput, searchQuery, filter, regions, form, editingId,
+                filteredProducts, similarProducts, suggestedLocations, showLocSuggestions, hideSuggestions,
+                saveConfig, resetToDefault, handleImage, submitProduct, 
+                openUploadModal, editProduct, confirmDelete, closeUpload, 
+                viewImage, formatDate, checkDuplicateName
+            };
+        }
+    }).mount('#app');
+</script>
+
+<style>
+    .animate-slide-up { animation: slideUp 0.3s ease-out; }
+    @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+
+</body>
+</html>
