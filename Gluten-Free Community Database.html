@@ -49,26 +49,6 @@
             box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1);
         }
 
-        .category-chip {
-            padding: 6px 14px;
-            border-radius: 99px;
-            font-size: 13px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: 1px solid transparent;
-        }
-        .category-chip.active {
-            background-color: #ffedd5;
-            color: #c2410c;
-            border-color: #fdba74;
-        }
-        .category-chip.inactive {
-            background-color: white;
-            color: #9ca3af;
-            border-color: #e5e7eb;
-        }
-
         /* 圖片容器 */
         .img-box {
             width: 100%;
@@ -108,6 +88,41 @@
             cursor: pointer;
         }
         .suggestion-item:hover { background-color: #fff7ed; color: #ea580c; }
+
+        /* Region Cards */
+        .region-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            border-radius: 20px;
+            background: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            border: 2px solid transparent;
+            transition: all 0.2s;
+            cursor: pointer;
+            height: 140px;
+        }
+        .region-card:active { transform: scale(0.96); }
+        
+        .location-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            background: white;
+            border-radius: 16px;
+            margin-bottom: 10px;
+            border: 1px solid #fed7aa;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .location-item:active { background: #fff7ed; }
+
+        .slide-fade-enter-active { transition: all 0.3s ease-out; }
+        .slide-fade-leave-active { transition: all 0.2s cubic-bezier(1, 0.5, 0.8, 1); }
+        .slide-fade-enter-from, .slide-fade-leave-to { transform: translateX(20px); opacity: 0; }
     </style>
 </head>
 <body>
@@ -117,10 +132,20 @@
     <!-- 頂部導航 -->
     <header class="px-6 pt-6 pb-4 bg-white sticky top-0 z-20 shadow-sm rounded-b-[30px]">
         <div class="flex justify-between items-center mb-4">
-            <h1 class="text-2xl font-bold text-orange-600 flex items-center gap-2">
-                <i class="fa-solid fa-wheat-awn-circle-exclamation"></i>
-                GF Radar
-            </h1>
+            <div class="flex items-center gap-2">
+                <!-- 返回按鈕 -->
+                <button v-if="viewMode !== 'home' && !searchQuery" @click="goBack" class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center mr-1">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                
+                <h1 class="text-2xl font-bold text-orange-600 flex items-center gap-2">
+                    <span v-if="searchQuery">搜尋結果</span>
+                    <span v-else-if="viewMode === 'home'">GF Radar</span>
+                    <span v-else-if="viewMode === 'locations'">{{ currentRegion }}</span>
+                    <span v-else-if="viewMode === 'products'">{{ currentLocation }}</span>
+                </h1>
+            </div>
+
             <div class="flex items-center gap-2">
                 <span v-if="statusMsg" class="text-[10px] px-2 py-1 rounded-full bg-green-100 text-green-600 font-bold animate-pulse">{{ statusMsg }}</span>
                 <button @click="showConfig = true" class="w-8 h-8 rounded-full bg-orange-50 text-orange-400 flex items-center justify-center">
@@ -129,21 +154,13 @@
             </div>
         </div>
 
-        <!-- 搜尋與篩選區 -->
-        <div class="space-y-3">
-            <div class="relative">
-                <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i>
-                <input type="text" v-model="searchQuery" placeholder="搜尋商品、地點..." class="input-std pl-10 py-2.5 text-sm">
-            </div>
-            
-            <!-- 地區篩選 -->
-            <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                <button v-for="r in regions" :key="r" 
-                    @click="filter.region = filter.region === r ? '' : r"
-                    :class="['category-chip whitespace-nowrap', filter.region === r || (!filter.region && r === '全部') ? 'active' : 'inactive']">
-                    {{ r === '' ? '全部地區' : r }}
-                </button>
-            </div>
+        <!-- 搜尋 -->
+        <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i>
+            <input type="text" v-model="searchQuery" placeholder="輸入關鍵字跨區搜尋..." class="input-std pl-10 py-2.5 text-sm">
+            <button v-if="searchQuery" @click="searchQuery=''" class="absolute right-4 top-3.5 text-gray-400">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
     </header>
 
@@ -152,58 +169,73 @@
         
         <div v-if="loading" class="text-center py-10 text-gray-400">
             <i class="fa-solid fa-circle-notch fa-spin text-2xl mb-2"></i>
-            <p class="text-sm">正在同步社群資料...</p>
+            <p class="text-sm">載入美味數據中...</p>
         </div>
 
-        <div v-else-if="filteredProducts.length === 0" class="text-center py-20 text-gray-400">
-            <i class="fa-solid fa-cookie-bite text-4xl mb-3 text-orange-200"></i>
-            <p>目前沒有相關商品</p>
-            <p class="text-xs mt-1">成為第一個分享的人吧！</p>
+        <div v-if="!user && !loading" class="text-center py-10 text-red-400">
+            <i class="fa-solid fa-wifi-slash text-2xl mb-2"></i>
+            <p class="text-sm">尚未連線至雲端資料庫</p>
+            <button @click="retryConnection" class="mt-2 text-xs bg-white border border-red-200 px-3 py-1 rounded-full">重試連線</button>
         </div>
 
-        <div v-for="product in filteredProducts" :key="product.id" class="card p-4 flex flex-col gap-3 group relative overflow-hidden">
-            <!-- 區域標籤 -->
-            <div class="absolute top-0 right-0 bg-orange-100 text-orange-600 text-[10px] font-bold px-3 py-1 rounded-bl-xl">
-                {{ product.region }}
+        <!-- 1. 搜尋結果模式 (只要有輸入字，就直接顯示商品列表) -->
+        <div v-else-if="searchQuery">
+             <div v-if="filteredProducts.length === 0" class="text-center py-20 text-gray-400">
+                <i class="fa-solid fa-magnifying-glass text-4xl mb-3 text-orange-200"></i>
+                <p>找不到 "{{ searchQuery }}"</p>
             </div>
+            <div v-else class="space-y-4">
+                <p class="text-xs text-gray-500 pl-1">找到 {{ filteredProducts.length }} 筆相關結果：</p>
+                <product-card v-for="p in filteredProducts" :key="p.id" :product="p" @view-img="viewImage"></product-card>
+            </div>
+        </div>
 
-            <!-- 商品頭部 -->
-            <div class="flex gap-3">
-                <div class="w-20 h-20 rounded-xl bg-gray-100 shrink-0 overflow-hidden cursor-pointer" @click="viewImage(product.frontImage)">
-                    <img :src="product.frontImage" class="w-full h-full object-cover">
-                </div>
-                <div class="flex-1 min-w-0">
-                    <div class="flex justify-between items-start">
-                        <h3 class="font-bold text-slate-800 text-lg leading-tight truncate">{{ product.name }}</h3>
-                    </div>
-                    <div class="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                        <span class="bg-gray-100 px-2 py-0.5 rounded-md">{{ product.category }}</span>
-                        <span class="bg-gray-100 px-2 py-0.5 rounded-md text-orange-500 font-bold"><i class="fa-solid fa-location-dot mr-1"></i>{{ product.location }}</span>
-                    </div>
-                    <div class="mt-2 font-bold text-orange-600">
-                        約 NT$ {{ product.price }}
-                    </div>
-                </div>
-            </div>
-
-            <!-- 成分表展開 -->
-            <div class="bg-orange-50/50 rounded-xl p-3 border border-orange-100 cursor-pointer hover:bg-orange-50 transition" @click="viewImage(product.ingredientImage)">
-                <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                    <i class="fa-solid fa-list-check text-orange-400"></i>
-                    <span>成分表 (點擊放大檢查)</span>
-                </div>
-                <div class="h-16 w-full rounded-lg overflow-hidden relative">
-                    <img :src="product.ingredientImage" class="w-full h-full object-cover opacity-80 hover:opacity-100 transition">
-                    <div class="absolute inset-0 flex items-center justify-center bg-black/5">
-                        <i class="fa-solid fa-magnifying-glass-plus text-white drop-shadow-md"></i>
-                    </div>
-                </div>
-            </div>
+        <!-- 2. 正常導航模式 -->
+        <transition name="slide-fade" mode="out-in" v-else>
             
-            <div class="text-[10px] text-gray-300 text-right">
-                由 {{ product.uploaderId ? product.uploaderId.substring(0,6) + '...' : '匿名旅人' }} 分享於 {{ formatDate(product.timestamp) }}
+            <!-- Level 1: 地區首頁 -->
+            <div v-if="viewMode === 'home'" class="grid grid-cols-2 gap-4">
+                <div v-for="r in regions" :key="r.name" @click="selectRegion(r.name)" 
+                     class="region-card border-orange-100 hover:border-orange-300 group">
+                    <div class="text-4xl mb-3 group-hover:scale-110 transition">{{ r.flag }}</div>
+                    <div class="font-bold text-lg text-slate-700">{{ r.name }}</div>
+                    <div class="text-xs text-orange-400 mt-1 font-bold">{{ getRegionCount(r.name) }} 個地點</div>
+                </div>
             </div>
-        </div>
+
+            <!-- Level 2: 地點列表 (該地區下的商店) -->
+            <div v-else-if="viewMode === 'locations'">
+                 <div v-if="currentLocationList.length === 0" class="text-center py-20 text-gray-400">
+                    <i class="fa-solid fa-store-slash text-4xl mb-3 text-orange-200"></i>
+                    <p>這裡還沒有人分享過地點耶</p>
+                    <p class="text-xs mt-1">快按右下角新增第一筆！</p>
+                </div>
+                <div v-else class="space-y-2">
+                    <div v-for="loc in currentLocationList" :key="loc.name" @click="selectLocation(loc.name)"
+                         class="location-item">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-500">
+                                <i class="fa-solid fa-shop"></i>
+                            </div>
+                            <span class="font-bold text-slate-700">{{ loc.name }}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                             <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">{{ loc.count }} 商品</span>
+                             <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Level 3: 商品列表 -->
+            <div v-else-if="viewMode === 'products'">
+                 <div v-if="filteredProducts.length === 0" class="text-center py-20 text-gray-400">
+                    <p>這裡空空如也</p>
+                </div>
+                <product-card v-for="p in filteredProducts" :key="p.id" :product="p" @view-img="viewImage"></product-card>
+            </div>
+
+        </transition>
 
     </main>
 
@@ -336,17 +368,45 @@
 
 </div>
 
+<!-- Product Card Component Template -->
+<template id="product-card-template">
+    <div class="card p-4 flex flex-col gap-3 group relative overflow-hidden">
+        <div v-if="product.region" class="absolute top-0 right-0 bg-orange-100 text-orange-600 text-[10px] font-bold px-3 py-1 rounded-bl-xl">
+            {{ product.region }}
+        </div>
+        <div class="flex gap-3">
+            <div class="w-20 h-20 rounded-xl bg-gray-100 shrink-0 overflow-hidden cursor-pointer" @click="$emit('view-img', product.frontImage)">
+                <img :src="product.frontImage" class="w-full h-full object-cover">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex justify-between items-start">
+                    <h3 class="font-bold text-slate-800 text-lg leading-tight truncate">{{ product.name }}</h3>
+                </div>
+                <div class="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                    <span class="bg-gray-100 px-2 py-0.5 rounded-md">{{ product.category }}</span>
+                    <span class="bg-gray-100 px-2 py-0.5 rounded-md text-orange-500 font-bold"><i class="fa-solid fa-location-dot mr-1"></i>{{ product.location }}</span>
+                </div>
+                <div class="mt-2 font-bold text-orange-600">約 NT$ {{ product.price }}</div>
+            </div>
+        </div>
+        <div class="bg-orange-50/50 rounded-xl p-3 border border-orange-100 cursor-pointer hover:bg-orange-50 transition" @click="$emit('view-img', product.ingredientImage)">
+            <div class="flex items-center gap-2 text-xs text-gray-500 mb-2"><i class="fa-solid fa-list-check text-orange-400"></i><span>成分表</span></div>
+            <div class="h-16 w-full rounded-lg overflow-hidden relative">
+                <img :src="product.ingredientImage" class="w-full h-full object-cover opacity-80 hover:opacity-100 transition">
+            </div>
+        </div>
+    </div>
+</template>
+
 <!-- Firebase SDK -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // 預設公用資料庫 (Public Demo)
-    // 注意：這是一個公開的測試用 Firebase 專案，任何人都能讀寫。
-    // 如果您需要私密性，請在設定中替換成您自己的 Config。
+    // Public Demo Config - Fallback
     const DEFAULT_CONFIG = {
-        apiKey: "AIzaSyBMZkTTRKgogrkSLfwrnmmMcUvZk5rSJ9w", // 範例 Key，請勿用於生產環境
+        apiKey: "AIzaSyBMZkTTRKgogrkSLfwrnmmMcUvZk5rSJ9w", 
         authDomain: "mymoney-8e727.firebaseapp.com",
         projectId: "mymoney-8e727",
         storageBucket: "mymoney-8e727.firebasestorage.app",
@@ -356,7 +416,13 @@
 
     const { createApp, ref, reactive, computed, onMounted } = Vue;
 
+    const ProductCard = {
+        props: ['product'],
+        template: '#product-card-template'
+    };
+
     createApp({
+        components: { ProductCard },
         setup() {
             const showUpload = ref(false);
             const showConfig = ref(false);
@@ -366,12 +432,24 @@
             const statusMsg = ref('');
             const firebaseConfigInput = ref('');
             
+            // Navigation State
+            const viewMode = ref('home'); // 'home', 'locations', 'products'
+            const currentRegion = ref('');
+            const currentLocation = ref('');
+
             // Data
             const products = ref([]);
             const searchQuery = ref('');
             const filter = reactive({ region: '', category: '' });
             const user = ref(null);
-            const regions = ['台灣', '日本', '韓國', '歐美', '其他'];
+            
+            const regions = [
+                { name: '台灣', flag: '🇹🇼' },
+                { name: '日本', flag: '🇯🇵' },
+                { name: '韓國', flag: '🇰🇷' },
+                { name: '歐美', flag: '🇺🇸' },
+                { name: '其他', flag: '🌏' }
+            ];
 
             // Form
             const form = reactive({
@@ -382,40 +460,40 @@
 
             // Firebase refs
             let db = null;
-            let app = null;
+            let appId = null;
 
             onMounted(() => {
-                const customCfg = localStorage.getItem('gf_firebase_config');
-                const configToUse = customCfg ? JSON.parse(customCfg) : DEFAULT_CONFIG;
-                firebaseConfigInput.value = customCfg || JSON.stringify(DEFAULT_CONFIG, null, 2);
-                
+                const cfg = localStorage.getItem('gf_firebase_config');
+                const configToUse = cfg ? JSON.parse(cfg) : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : DEFAULT_CONFIG);
+                firebaseConfigInput.value = cfg || JSON.stringify(DEFAULT_CONFIG, null, 2);
                 initFirebase(configToUse);
             });
 
             const initFirebase = async (config) => {
                 try {
-                    statusMsg.value = "";
-                    // Prevent multiple inits if app already exists
-                    // Simplified for this demo: just try init
-                    try {
-                        app = initializeApp(config); 
-                    } catch(e) {
-                         // If app already initialized (e.g. duplicate config), ignore or reuse
-                         // In simple script module, this might re-run on reload only.
-                    }
+                    statusMsg.value = "連線中...";
                     
+                    appId = typeof __app_id !== 'undefined' ? __app_id : (config.projectId || 'mymoney-8e727');
+
+                    const app = initializeApp(config);
                     const auth = getAuth(app);
                     db = getFirestore(app);
                     
-                    await signInAnonymously(auth);
+                    // Auth Priority: Custom Token -> Anonymous
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                         await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                         await signInAnonymously(auth);
+                    }
+                    
                     onAuthStateChanged(auth, (u) => {
                         user.value = u;
-                        statusMsg.value = "雲端已連線";
-                        loadProducts();
+                        statusMsg.value = "連線成功";
+                        loadProducts(); 
                     });
                 } catch(e) {
-                    console.error("Init Error:", e);
-                    statusMsg.value = "連線異常 (請檢查設定)";
+                    console.error(e);
+                    statusMsg.value = "連線失敗";
                 }
             };
 
@@ -423,36 +501,37 @@
                 try {
                     const cfg = JSON.parse(firebaseConfigInput.value);
                     localStorage.setItem('gf_firebase_config', firebaseConfigInput.value);
-                    // Reload to apply new config cleanly
-                    location.reload();
+                    initFirebase(cfg);
+                    setTimeout(()=>showConfig.value=false, 1000);
                 } catch(e) { alert("JSON 格式錯誤"); }
             };
-
+            
             const resetToDefault = () => {
                 localStorage.removeItem('gf_firebase_config');
                 location.reload();
             };
+            
+            const retryConnection = () => {
+                const cfg = localStorage.getItem('gf_firebase_config');
+                const configToUse = cfg ? JSON.parse(cfg) : DEFAULT_CONFIG;
+                initFirebase(configToUse);
+            };
 
-            // Firestore Realtime Listener
             const loadProducts = () => {
                 loading.value = true;
-                // Rule 1: Use strict path /artifacts/{appId}/public/data/gf_products
-                // Using a public collection path for community sharing
-                // Assuming 'mymoney-8e727' is the appId for simplicity in this context or use a variable
-                const appIdStr = 'mymoney-8e727'; // Hardcoded for this specific demo context
-                const q = query(collection(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products'), orderBy("timestamp", "desc"));
+                // Rule 1: Strict Path with appId
+                const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'gf_products'), orderBy("timestamp", "desc"));
                 
                 onSnapshot(q, (snapshot) => {
                     products.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     loading.value = false;
                 }, (error) => {
-                    console.error("Snapshot error:", error);
+                    console.error("Firestore Error:", error);
                     loading.value = false;
                     statusMsg.value = "讀取失敗";
                 });
             };
 
-            // Image Compression
             const handleImage = (e, field) => {
                 const file = e.target.files[0];
                 if(!file) return;
@@ -475,15 +554,35 @@
                 e.target.value = '';
             };
 
-            // Computed Helpers
+            // Computed Properties for Navigation
             const filteredProducts = computed(() => {
                 return products.value.filter(p => {
-                    const matchSearch = (p.name + p.location).toLowerCase().includes(searchQuery.value.toLowerCase());
-                    const matchRegion = !filter.region || filter.region === '全部' || p.region === filter.region;
-                    const matchCategory = !filter.category || p.category === filter.category;
-                    return matchSearch && matchRegion && matchCategory;
+                    if (searchQuery.value) {
+                         return (p.name + p.location).toLowerCase().includes(searchQuery.value.toLowerCase());
+                    }
+                    if (viewMode.value === 'home') return false; 
+                    if (viewMode.value === 'locations') return p.region === currentRegion.value;
+                    if (viewMode.value === 'products') {
+                        return p.region === currentRegion.value && p.location === currentLocation.value;
+                    }
+                    return false;
                 });
             });
+
+            const currentLocationList = computed(() => {
+                if (viewMode.value !== 'locations') return [];
+                const regionProducts = products.value.filter(p => p.region === currentRegion.value);
+                const locMap = {};
+                regionProducts.forEach(p => {
+                    if (!locMap[p.location]) locMap[p.location] = 0;
+                    locMap[p.location]++;
+                });
+                return Object.keys(locMap).map(name => ({ name, count: locMap[name] }));
+            });
+            
+            const getRegionCount = (regionName) => {
+                return new Set(products.value.filter(p => p.region === regionName).map(p => p.location)).size;
+            };
 
             const similarProducts = computed(() => {
                 if(!form.name || form.name.length < 2) return [];
@@ -501,6 +600,23 @@
                 }, 200);
             };
 
+            // Navigation Actions
+            const selectRegion = (r) => {
+                currentRegion.value = r;
+                viewMode.value = 'locations';
+            };
+            
+            const selectLocation = (l) => {
+                currentLocation.value = l;
+                viewMode.value = 'products';
+            };
+
+            const goBack = () => {
+                if (viewMode.value === 'products') viewMode.value = 'locations';
+                else if (viewMode.value === 'locations') viewMode.value = 'home';
+                searchQuery.value = '';
+            };
+
             const submitProduct = async () => {
                 if(!form.name || !form.location || !form.frontImage || !form.ingredientImage) {
                     alert("請填寫所有必填欄位並上傳照片");
@@ -513,13 +629,13 @@
 
                 isSubmitting.value = true;
                 try {
-                    const appIdStr = 'mymoney-8e727';
-                    await addDoc(collection(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products'), {
+                    // Rule 1 Strict Path
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'gf_products'), {
                         ...form,
                         uploaderId: user.value.uid,
                         timestamp: serverTimestamp()
                     });
-                    alert("發布成功！感謝您的分享 ❤️");
+                    alert("發布成功！");
                     closeUpload();
                     Object.assign(form, { name: '', region: '台灣', category: '零食', location: '', price: null, frontImage: null, ingredientImage: null });
                 } catch(e) {
@@ -534,15 +650,16 @@
             const closeUpload = () => showUpload.value = false;
             const viewImage = (src) => viewingImg.value = src;
             const formatDate = (ts) => ts ? new Date(ts.seconds * 1000).toLocaleDateString() : '剛剛';
-
-            // Dummy function for checkDuplicateName to avoid error in template, logic handled by computed similarProducts
             const checkDuplicateName = () => {}; 
 
             return {
                 showUpload, showConfig, viewingImg, loading, isSubmitting, statusMsg,
                 firebaseConfigInput, searchQuery, filter, regions, form,
                 filteredProducts, similarProducts, suggestedLocations, showLocSuggestions, hideSuggestions,
-                saveConfig, resetToDefault, handleImage, submitProduct, openUploadModal, closeUpload, viewImage, formatDate, checkDuplicateName
+                saveConfig, handleImage, submitProduct, openUploadModal, closeUpload, viewImage, formatDate, checkDuplicateName, resetToDefault, retryConnection,
+                // Nav
+                viewMode, currentRegion, currentLocation, currentLocationList, selectRegion, selectLocation, goBack, getRegionCount,
+                user // expose user for template check
             };
         }
     }).mount('#app');
@@ -556,5 +673,4 @@
 </style>
 
 </body>
-
 </html>
