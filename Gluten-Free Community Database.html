@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>無麩質美食雷達 | GF Community</title>
+    
+    <!-- 核心函式庫 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'M PLUS Rounded 1c', 'Noto Sans TC', sans-serif;
+            background-color: #fff7ed; /* 溫暖的米色背景 */
+            color: #431407;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 4px 20px rgba(251, 146, 60, 0.08);
+            border: 1px solid #ffedd5;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-main {
+            background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(234, 88, 12, 0.3);
+            transition: transform 0.2s;
+        }
+        .btn-main:active { transform: scale(0.95); }
+
+        .input-std {
+            background: #fff;
+            border: 2px solid #fed7aa;
+            border-radius: 16px;
+            padding: 12px 16px;
+            width: 100%;
+            outline: none;
+            transition: all 0.3s;
+        }
+        .input-std:focus {
+            border-color: #f97316;
+            box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1);
+        }
+
+        .category-chip {
+            padding: 6px 14px;
+            border-radius: 99px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        .category-chip.active {
+            background-color: #ffedd5;
+            color: #c2410c;
+            border-color: #fdba74;
+        }
+        .category-chip.inactive {
+            background-color: white;
+            color: #9ca3af;
+            border-color: #e5e7eb;
+        }
+
+        /* 圖片容器 */
+        .img-box {
+            width: 100%;
+            height: 160px;
+            background-color: #f3f4f6;
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #d1d5db;
+            cursor: pointer;
+        }
+        .img-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* 搜尋建議下拉 */
+        .suggestions {
+            position: absolute;
+            background: white;
+            border: 1px solid #fed7aa;
+            border-radius: 12px;
+            width: 100%;
+            max-height: 150px;
+            overflow-y: auto;
+            z-index: 50;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            margin-top: 4px;
+        }
+        .suggestion-item {
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .suggestion-item:hover { background-color: #fff7ed; color: #ea580c; }
+    </style>
+</head>
+<body>
+
+<div id="app" class="flex flex-col h-screen max-w-md mx-auto relative bg-[#fff7ed]">
+    
+    <!-- 頂部導航 -->
+    <header class="px-6 pt-6 pb-4 bg-white sticky top-0 z-20 shadow-sm rounded-b-[30px]">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-2xl font-bold text-orange-600 flex items-center gap-2">
+                <i class="fa-solid fa-wheat-awn-circle-exclamation"></i>
+                GF Radar
+            </h1>
+            <div class="flex items-center gap-2">
+                <span v-if="statusMsg" class="text-[10px] px-2 py-1 rounded-full bg-green-100 text-green-600 font-bold animate-pulse">{{ statusMsg }}</span>
+                <button @click="showConfig = true" class="w-8 h-8 rounded-full bg-orange-50 text-orange-400 flex items-center justify-center">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 搜尋與篩選區 -->
+        <div class="space-y-3">
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i>
+                <input type="text" v-model="searchQuery" placeholder="搜尋商品、地點..." class="input-std pl-10 py-2.5 text-sm">
+            </div>
+            
+            <!-- 地區篩選 -->
+            <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                <button v-for="r in regions" :key="r" 
+                    @click="filter.region = filter.region === r ? '' : r"
+                    :class="['category-chip whitespace-nowrap', filter.region === r || (!filter.region && r === '全部') ? 'active' : 'inactive']">
+                    {{ r === '' ? '全部地區' : r }}
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要列表區 -->
+    <main class="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-24">
+        
+        <div v-if="loading" class="text-center py-10 text-gray-400">
+            <i class="fa-solid fa-circle-notch fa-spin text-2xl mb-2"></i>
+            <p class="text-sm">正在同步社群資料...</p>
+        </div>
+
+        <div v-else-if="filteredProducts.length === 0" class="text-center py-20 text-gray-400">
+            <i class="fa-solid fa-cookie-bite text-4xl mb-3 text-orange-200"></i>
+            <p>目前沒有相關商品</p>
+            <p class="text-xs mt-1">成為第一個分享的人吧！</p>
+        </div>
+
+        <div v-for="product in filteredProducts" :key="product.id" class="card p-4 flex flex-col gap-3 group relative overflow-hidden">
+            <!-- 區域標籤 -->
+            <div class="absolute top-0 right-0 bg-orange-100 text-orange-600 text-[10px] font-bold px-3 py-1 rounded-bl-xl">
+                {{ product.region }}
+            </div>
+
+            <!-- 商品頭部 -->
+            <div class="flex gap-3">
+                <div class="w-20 h-20 rounded-xl bg-gray-100 shrink-0 overflow-hidden cursor-pointer" @click="viewImage(product.frontImage)">
+                    <img :src="product.frontImage" class="w-full h-full object-cover">
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between items-start">
+                        <h3 class="font-bold text-slate-800 text-lg leading-tight truncate">{{ product.name }}</h3>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                        <span class="bg-gray-100 px-2 py-0.5 rounded-md">{{ product.category }}</span>
+                        <span class="bg-gray-100 px-2 py-0.5 rounded-md text-orange-500 font-bold"><i class="fa-solid fa-location-dot mr-1"></i>{{ product.location }}</span>
+                    </div>
+                    <div class="mt-2 font-bold text-orange-600">
+                        約 NT$ {{ product.price }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 成分表展開 -->
+            <div class="bg-orange-50/50 rounded-xl p-3 border border-orange-100 cursor-pointer hover:bg-orange-50 transition" @click="viewImage(product.ingredientImage)">
+                <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                    <i class="fa-solid fa-list-check text-orange-400"></i>
+                    <span>成分表 (點擊放大檢查)</span>
+                </div>
+                <div class="h-16 w-full rounded-lg overflow-hidden relative">
+                    <img :src="product.ingredientImage" class="w-full h-full object-cover opacity-80 hover:opacity-100 transition">
+                    <div class="absolute inset-0 flex items-center justify-center bg-black/5">
+                        <i class="fa-solid fa-magnifying-glass-plus text-white drop-shadow-md"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-[10px] text-gray-300 text-right">
+                由 {{ product.uploaderId ? product.uploaderId.substring(0,6) + '...' : '匿名旅人' }} 分享於 {{ formatDate(product.timestamp) }}
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FAB -->
+    <button @click="openUploadModal" class="absolute bottom-6 right-6 w-14 h-14 rounded-full btn-main flex items-center justify-center text-2xl shadow-xl z-20 hover:scale-110 transition-transform">
+        <i class="fa-solid fa-plus"></i>
+    </button>
+
+    <!-- 上傳 Modal -->
+    <div v-if="showUpload" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeUpload"></div>
+        <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl p-6 relative z-50 max-h-[90vh] overflow-y-auto flex flex-col shadow-2xl animate-slide-up">
+            
+            <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-4"></div>
+            <h2 class="text-xl font-bold text-center mb-6 text-orange-600">分享無麩質好物</h2>
+
+            <div class="space-y-5">
+                
+                <!-- 1. 照片上傳區 -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                        <label class="text-xs font-bold text-gray-500">正面包裝照 <span class="text-red-400">*</span></label>
+                        <div class="img-box" @click="$refs.frontInput.click()">
+                            <img v-if="form.frontImage" :src="form.frontImage">
+                            <div v-else class="text-gray-300 flex flex-col items-center">
+                                <i class="fa-solid fa-camera text-2xl mb-1"></i>
+                                <span class="text-xs">點擊上傳</span>
+                            </div>
+                        </div>
+                        <input type="file" ref="frontInput" accept="image/*" class="hidden" @change="e => handleImage(e, 'frontImage')">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-xs font-bold text-gray-500">成分表特寫 <span class="text-red-400">*</span></label>
+                        <div class="img-box" @click="$refs.ingInput.click()">
+                            <img v-if="form.ingredientImage" :src="form.ingredientImage">
+                            <div v-else class="text-gray-300 flex flex-col items-center">
+                                <i class="fa-solid fa-file-invoice text-2xl mb-1"></i>
+                                <span class="text-xs">確認無麩質</span>
+                            </div>
+                        </div>
+                        <input type="file" ref="ingInput" accept="image/*" class="hidden" @change="e => handleImage(e, 'ingredientImage')">
+                    </div>
+                </div>
+
+                <!-- 2. 基本資訊 -->
+                <div class="relative">
+                    <label class="text-xs font-bold text-gray-500 mb-1">商品名稱 <span class="text-red-400">*</span></label>
+                    <input type="text" v-model="form.name" class="input-std" placeholder="例如：米製義大利麵" @input="checkDuplicateName">
+                    <!-- 類似商品提醒 -->
+                    <div v-if="similarProducts.length > 0" class="suggestions">
+                        <div class="bg-orange-50 p-2 text-xs text-orange-600 font-bold border-b border-orange-100">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i> 社群內已有類似商品：
+                        </div>
+                        <div v-for="p in similarProducts" :key="p.id" class="suggestion-item text-gray-500">
+                            {{ p.name }} ({{ p.location }})
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 mb-1">地區</label>
+                        <select v-model="form.region" class="input-std bg-white">
+                            <option value="台灣">🇹🇼 台灣</option>
+                            <option value="日本">🇯🇵 日本</option>
+                            <option value="韓國">🇰🇷 韓國</option>
+                            <option value="歐美">🇺🇸 歐美</option>
+                            <option value="其他">🌏 其他</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 mb-1">分類</label>
+                        <select v-model="form.category" class="input-std bg-white">
+                            <option value="零食">🍪 零食/點心</option>
+                            <option value="主食">🍜 麵/飯/麵包</option>
+                            <option value="醬料">🥣 醬料/調味</option>
+                            <option value="飲品">🥤 飲料/酒</option>
+                            <option value="其他">📦 其他</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 3. 購買資訊 -->
+                <div class="relative">
+                    <label class="text-xs font-bold text-gray-500 mb-1">購買地點/店鋪 <span class="text-red-400">*</span></label>
+                    <input type="text" v-model="form.location" class="input-std" placeholder="例如：7-11, 全聯, Donki..." @focus="showLocSuggestions=true" @blur="hideSuggestions">
+                    <!-- 地點建議 -->
+                    <div v-if="showLocSuggestions" class="suggestions">
+                        <div v-for="loc in suggestedLocations" :key="loc" class="suggestion-item" @click="form.location = loc">
+                            {{ loc }}
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-gray-500 mb-1">大概金額 (台幣)</label>
+                    <input type="number" v-model.number="form.price" class="input-std font-mono text-orange-600 font-bold" placeholder="0">
+                </div>
+
+            </div>
+
+            <div class="mt-8 flex gap-3">
+                <button @click="closeUpload" class="flex-1 py-3 rounded-xl border-2 border-gray-100 text-gray-400 font-bold">取消</button>
+                <button @click="submitProduct" class="flex-[2] py-3 rounded-xl btn-main font-bold" :disabled="isSubmitting">
+                    {{ isSubmitting ? '上傳中...' : '發布分享' }}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 設定 Firebase (隱藏式) -->
+    <div v-if="showConfig" class="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/80">
+        <div class="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+            <h3 class="font-bold text-lg mb-4 text-slate-800">連線設定 (進階)</h3>
+            <p class="text-xs text-gray-500 mb-3">若您想連結自己的資料庫，可在此輸入 Config。若留空則使用預設公用資料庫。</p>
+            <textarea v-model="firebaseConfigInput" class="w-full h-32 border border-gray-300 rounded-xl p-3 text-xs font-mono bg-gray-50 mb-4" placeholder='{ "apiKey": "...", ... }'></textarea>
+            <div class="flex gap-2">
+                <button @click="showConfig = false" class="flex-1 py-2 rounded-lg border border-gray-200">關閉</button>
+                <button @click="saveConfig" class="flex-1 py-2 rounded-lg bg-slate-800 text-white">儲存並連線</button>
+            </div>
+            <button @click="resetToDefault" class="w-full mt-2 text-xs text-orange-400 underline">重置為預設公用庫</button>
+        </div>
+    </div>
+
+    <!-- 圖片放大 -->
+    <div v-if="viewingImg" class="fixed inset-0 z-[70] bg-black/90 flex flex-col justify-center items-center p-4" @click="viewingImg=null">
+        <img :src="viewingImg" class="max-w-full max-h-[80vh] rounded-lg shadow-2xl">
+        <p class="text-white/50 text-sm mt-4">點擊任意處關閉</p>
+    </div>
+
+</div>
+
+<!-- Firebase SDK -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // 預設公用資料庫 (Public Demo)
+    // 注意：這是一個公開的測試用 Firebase 專案，任何人都能讀寫。
+    // 如果您需要私密性，請在設定中替換成您自己的 Config。
+    const DEFAULT_CONFIG = {
+        apiKey: "AIzaSyBMZkTTRKgogrkSLfwrnmmMcUvZk5rSJ9w", // 範例 Key，請勿用於生產環境
+        authDomain: "mymoney-8e727.firebaseapp.com",
+        projectId: "mymoney-8e727",
+        storageBucket: "mymoney-8e727.firebasestorage.app",
+        messagingSenderId: "697114335542",
+        appId: "1:697114335542:web:4036b6b490f028efcdbb97"
+    };
+
+    const { createApp, ref, reactive, computed, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            const showUpload = ref(false);
+            const showConfig = ref(false);
+            const viewingImg = ref(null);
+            const loading = ref(false);
+            const isSubmitting = ref(false);
+            const statusMsg = ref('');
+            const firebaseConfigInput = ref('');
+            
+            // Data
+            const products = ref([]);
+            const searchQuery = ref('');
+            const filter = reactive({ region: '', category: '' });
+            const user = ref(null);
+            const regions = ['台灣', '日本', '韓國', '歐美', '其他'];
+
+            // Form
+            const form = reactive({
+                name: '', region: '台灣', category: '零食', location: '', price: null,
+                frontImage: null, ingredientImage: null
+            });
+            const showLocSuggestions = ref(false);
+
+            // Firebase refs
+            let db = null;
+            let app = null;
+
+            onMounted(() => {
+                const customCfg = localStorage.getItem('gf_firebase_config');
+                const configToUse = customCfg ? JSON.parse(customCfg) : DEFAULT_CONFIG;
+                firebaseConfigInput.value = customCfg || JSON.stringify(DEFAULT_CONFIG, null, 2);
+                
+                initFirebase(configToUse);
+            });
+
+            const initFirebase = async (config) => {
+                try {
+                    statusMsg.value = "";
+                    // Prevent multiple inits if app already exists
+                    // Simplified for this demo: just try init
+                    try {
+                        app = initializeApp(config); 
+                    } catch(e) {
+                         // If app already initialized (e.g. duplicate config), ignore or reuse
+                         // In simple script module, this might re-run on reload only.
+                    }
+                    
+                    const auth = getAuth(app);
+                    db = getFirestore(app);
+                    
+                    await signInAnonymously(auth);
+                    onAuthStateChanged(auth, (u) => {
+                        user.value = u;
+                        statusMsg.value = "雲端已連線";
+                        loadProducts();
+                    });
+                } catch(e) {
+                    console.error("Init Error:", e);
+                    statusMsg.value = "連線異常 (請檢查設定)";
+                }
+            };
+
+            const saveConfig = () => {
+                try {
+                    const cfg = JSON.parse(firebaseConfigInput.value);
+                    localStorage.setItem('gf_firebase_config', firebaseConfigInput.value);
+                    // Reload to apply new config cleanly
+                    location.reload();
+                } catch(e) { alert("JSON 格式錯誤"); }
+            };
+
+            const resetToDefault = () => {
+                localStorage.removeItem('gf_firebase_config');
+                location.reload();
+            };
+
+            // Firestore Realtime Listener
+            const loadProducts = () => {
+                loading.value = true;
+                // Rule 1: Use strict path /artifacts/{appId}/public/data/gf_products
+                // Using a public collection path for community sharing
+                // Assuming 'mymoney-8e727' is the appId for simplicity in this context or use a variable
+                const appIdStr = 'mymoney-8e727'; // Hardcoded for this specific demo context
+                const q = query(collection(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products'), orderBy("timestamp", "desc"));
+                
+                onSnapshot(q, (snapshot) => {
+                    products.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    loading.value = false;
+                }, (error) => {
+                    console.error("Snapshot error:", error);
+                    loading.value = false;
+                    statusMsg.value = "讀取失敗";
+                });
+            };
+
+            // Image Compression
+            const handleImage = (e, field) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const img = new Image();
+                    img.src = evt.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        const MAX_WIDTH = 800;
+                        let w = img.width, h = img.height;
+                        if(w > MAX_WIDTH) { h *= MAX_WIDTH/w; w = MAX_WIDTH; }
+                        canvas.width = w; canvas.height = h;
+                        ctx.drawImage(img, 0, 0, w, h);
+                        form[field] = canvas.toDataURL('image/jpeg', 0.6);
+                    }
+                };
+                reader.readAsDataURL(file);
+                e.target.value = '';
+            };
+
+            // Computed Helpers
+            const filteredProducts = computed(() => {
+                return products.value.filter(p => {
+                    const matchSearch = (p.name + p.location).toLowerCase().includes(searchQuery.value.toLowerCase());
+                    const matchRegion = !filter.region || filter.region === '全部' || p.region === filter.region;
+                    const matchCategory = !filter.category || p.category === filter.category;
+                    return matchSearch && matchRegion && matchCategory;
+                });
+            });
+
+            const similarProducts = computed(() => {
+                if(!form.name || form.name.length < 2) return [];
+                return products.value.filter(p => p.name.includes(form.name)).slice(0, 3);
+            });
+
+            const suggestedLocations = computed(() => {
+                const locs = new Set(products.value.map(p => p.location));
+                return Array.from(locs).filter(l => l.includes(form.location || '')).slice(0, 5);
+            });
+            
+            const hideSuggestions = () => {
+                setTimeout(() => {
+                    showLocSuggestions.value = false;
+                }, 200);
+            };
+
+            const submitProduct = async () => {
+                if(!form.name || !form.location || !form.frontImage || !form.ingredientImage) {
+                    alert("請填寫所有必填欄位並上傳照片");
+                    return;
+                }
+                if(!db || !user.value) {
+                    alert("未連線至雲端");
+                    return;
+                }
+
+                isSubmitting.value = true;
+                try {
+                    const appIdStr = 'mymoney-8e727';
+                    await addDoc(collection(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products'), {
+                        ...form,
+                        uploaderId: user.value.uid,
+                        timestamp: serverTimestamp()
+                    });
+                    alert("發布成功！感謝您的分享 ❤️");
+                    closeUpload();
+                    Object.assign(form, { name: '', region: '台灣', category: '零食', location: '', price: null, frontImage: null, ingredientImage: null });
+                } catch(e) {
+                    console.error(e);
+                    alert("上傳失敗: " + e.message);
+                } finally {
+                    isSubmitting.value = false;
+                }
+            };
+
+            const openUploadModal = () => showUpload.value = true;
+            const closeUpload = () => showUpload.value = false;
+            const viewImage = (src) => viewingImg.value = src;
+            const formatDate = (ts) => ts ? new Date(ts.seconds * 1000).toLocaleDateString() : '剛剛';
+
+            // Dummy function for checkDuplicateName to avoid error in template, logic handled by computed similarProducts
+            const checkDuplicateName = () => {}; 
+
+            return {
+                showUpload, showConfig, viewingImg, loading, isSubmitting, statusMsg,
+                firebaseConfigInput, searchQuery, filter, regions, form,
+                filteredProducts, similarProducts, suggestedLocations, showLocSuggestions, hideSuggestions,
+                saveConfig, resetToDefault, handleImage, submitProduct, openUploadModal, closeUpload, viewImage, formatDate, checkDuplicateName
+            };
+        }
+    }).mount('#app');
+</script>
+
+<style>
+    .animate-slide-up { animation: slideUp 0.3s ease-out; }
+    @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+
+</body>
+</html>
