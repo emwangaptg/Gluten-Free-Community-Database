@@ -93,11 +93,11 @@
         }
         .diet-card:active { transform: scale(0.95); }
         
-        /* 預設淺色背景 (未選取) - 帶有淡淡的顏色 */
-        /* 改色：無麩質改為玫瑰紅 Rose */
+        /* 預設淺色背景 (未選取) */
         .diet-card.opt-gluten { background-color: #fff1f2; color: #9f1239; } /* Rose-50, Rose-800 */
         .diet-card.opt-dairy { background-color: #eff6ff; color: #1e40af; } /* Blue */
         .diet-card.opt-egg { background-color: #fefce8; color: #854d0e; } /* Yellow */
+        .diet-card.opt-soy { background-color: #faf5ff; color: #6b21a8; } /* Purple (Soy) */
         .diet-card.opt-additive { background-color: #ecfdf5; color: #065f46; } /* Emerald */
 
         /* 未選取時稍微透明/灰階，讓選取的更突出 */
@@ -115,10 +115,10 @@
         }
         
         /* 選取時的強調色 (Active Border & Background) */
-        /* 改色：無麩質 Active 改為 Rose */
-        .diet-card.active.opt-gluten { border-color: #f43f5e; background-color: #ffe4e6; } /* Rose-500, Rose-100 */
+        .diet-card.active.opt-gluten { border-color: #f43f5e; background-color: #ffe4e6; }
         .diet-card.active.opt-dairy { border-color: #3b82f6; background-color: #dbeafe; }
         .diet-card.active.opt-egg { border-color: #eab308; background-color: #fef9c3; }
+        .diet-card.active.opt-soy { border-color: #a855f7; background-color: #f3e8ff; } /* Purple */
         .diet-card.active.opt-additive { border-color: #10b981; background-color: #d1fae5; }
 
         .img-box {
@@ -273,7 +273,8 @@
                     </button>
                 </div>
                 
-                <div class="grid grid-cols-2 gap-3">
+                <!-- 調整 grid 為 3 欄，以容納 5 個選項 -->
+                <div class="grid grid-cols-3 gap-3">
                     <div @click="toggleDietFilter('no-gluten')" 
                          :class="['diet-card opt-gluten', navState.selectedDiets.includes('no-gluten') ? 'active' : '']">
                         <i class="fa-solid fa-wheat-awn-circle-exclamation text-xl mb-1"></i>
@@ -290,6 +291,13 @@
                          :class="['diet-card opt-egg', navState.selectedDiets.includes('no-egg') ? 'active' : '']">
                         <i class="fa-solid fa-egg text-xl mb-1"></i>
                         <span class="text-xs font-bold">無蛋</span>
+                    </div>
+
+                    <!-- 新增: 無黃豆 -->
+                    <div @click="toggleDietFilter('no-soy')" 
+                         :class="['diet-card opt-soy', navState.selectedDiets.includes('no-soy') ? 'active' : '']">
+                        <i class="fa-solid fa-seedling text-xl mb-1"></i>
+                        <span class="text-xs font-bold">無黃豆</span>
                     </div>
 
                     <div @click="toggleDietFilter('no-additive')" 
@@ -374,6 +382,10 @@
                                     </span>
                                     <span v-if="hasDietTag(product, 'no-egg')" class="inline-flex items-center gap-1 text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold">
                                         <i class="fa-solid fa-egg"></i> 無蛋
+                                    </span>
+                                    <!-- 新增: 無黃豆 -->
+                                    <span v-if="hasDietTag(product, 'no-soy')" class="inline-flex items-center gap-1 text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
+                                        <i class="fa-solid fa-seedling"></i> 無黃豆
                                     </span>
                                     <span v-if="hasDietTag(product, 'no-additive')" class="inline-flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
                                         <i class="fa-solid fa-leaf"></i> 0添加
@@ -473,7 +485,7 @@
                 <!-- 飲食標籤 (複選模式) -->
                 <div>
                     <label class="text-xs font-bold text-gray-500 mb-2 block">飲食標籤 (可複選) <span class="text-red-400">*</span></label>
-                    <div class="grid grid-cols-4 gap-2">
+                    <div class="grid grid-cols-3 gap-2">
                         
                         <div @click="toggleFormDietary('no-gluten')" 
                              :class="['diet-option', form.dietary.includes('no-gluten') ? 'selected' : 'bg-gray-50']">
@@ -491,6 +503,13 @@
                              :class="['diet-option', form.dietary.includes('no-egg') ? 'selected' : 'bg-gray-50']">
                             <div class="text-xl mb-1"><i class="fa-solid fa-egg"></i></div>
                             <div class="text-xs">無蛋</div>
+                        </div>
+
+                        <!-- 新增: 無黃豆選項 -->
+                        <div @click="toggleFormDietary('no-soy')" 
+                             :class="['diet-option', form.dietary.includes('no-soy') ? 'selected' : 'bg-gray-50']">
+                            <div class="text-xl mb-1"><i class="fa-solid fa-seedling"></i></div>
+                            <div class="text-xs">無黃豆</div>
                         </div>
 
                         <div @click="toggleFormDietary('no-additive')" 
@@ -775,7 +794,7 @@
             const getStoreTypeCount = (reg, type) => products.value.filter(p => p.region === reg && p.storeType === type).length;
             const getStoreTypeLabel = (typeVal) => storeTypes.find(t => t.value === typeVal)?.label || typeVal;
             const getDietLabel = (tag) => {
-                const map = { 'no-gluten': '無麩', 'no-dairy': '無奶', 'no-egg': '無蛋', 'no-additive': '0添加' };
+                const map = { 'no-gluten': '無麩', 'no-dairy': '無奶', 'no-egg': '無蛋', 'no-soy': '無黃豆', 'no-additive': '0添加' };
                 return map[tag] || tag;
             };
 
