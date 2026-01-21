@@ -76,7 +76,7 @@
             padding: 2px 8px; border-radius: 10px;
         }
 
-        /* 飲食快篩卡片 */
+        /* 飲食快篩卡片 (複選樣式) */
         .diet-card {
             border-radius: 16px;
             padding: 12px 8px;
@@ -85,13 +85,27 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: all 0.2s;
             box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-            border: 1px solid transparent;
-            height: 80px; /* 固定高度讓排版整齊 */
+            border: 2px solid transparent;
+            height: 85px; 
+            opacity: 0.8;
+            background-color: white;
         }
         .diet-card:active { transform: scale(0.95); }
-        
+        .diet-card.active {
+            opacity: 1;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(251, 146, 60, 0.2);
+            background-color: #fff7ed;
+            border-width: 2px;
+        }
+        /* 各別顏色定義 */
+        .diet-card.active.opt-gluten { border-color: #f59e0b; color: #b45309; }
+        .diet-card.active.opt-dairy { border-color: #3b82f6; color: #1d4ed8; }
+        .diet-card.active.opt-egg { border-color: #eab308; color: #854d0e; }
+        .diet-card.active.opt-additive { border-color: #10b981; color: #047857; }
+
         .img-box {
             width: 100%;
             height: 160px;
@@ -141,11 +155,15 @@
             align-items: center;
             justify-content: center;
             min-height: 70px;
+            opacity: 0.6;
         }
-        .diet-option.active {
+        .diet-option:hover { opacity: 0.8; }
+        .diet-option.selected {
             border-color: #fb923c;
             background-color: #fff7ed;
             color: #c2410c;
+            opacity: 1;
+            font-weight: bold;
         }
 
         /* 麵包屑導航 */
@@ -189,7 +207,7 @@
         <div class="breadcrumb px-1 scrollbar-hide">
             <div class="breadcrumb-item" @click="resetView"><i class="fa-solid fa-house"></i> 首頁</div>
             
-            <!-- 路徑 A: 地區導航 -->
+            <!-- 路徑 A: 地區導航 (只在點選地區後顯示) -->
             <template v-if="navState.region">
                 <span class="breadcrumb-arrow"><i class="fa-solid fa-chevron-right"></i></span>
                 <div class="breadcrumb-item" @click="navState.storeType = null" :class="{'breadcrumb-current': !navState.storeType}">
@@ -203,22 +221,17 @@
                 </template>
             </template>
 
-            <!-- 路徑 B: 飲食快篩導航 -->
-            <template v-if="navState.dietMode">
+            <!-- 路徑 B: 飲食快篩提示 (只顯示文字提示) -->
+            <template v-if="!navState.region && navState.selectedDiets.length > 0">
                 <span class="breadcrumb-arrow"><i class="fa-solid fa-chevron-right"></i></span>
-                <div class="breadcrumb-item breadcrumb-current">
-                    <span v-if="navState.dietMode === 'no-gluten'">無麩質</span>
-                    <span v-else-if="navState.dietMode === 'no-dairy'">無奶</span>
-                    <span v-else-if="navState.dietMode === 'no-egg'">無蛋</span>
-                    <span v-else-if="navState.dietMode === 'double-free'">無奶麩</span>
-                    <span v-else-if="navState.dietMode === 'egg-gluten-free'">無蛋麩</span>
-                    <span v-else>無蛋奶麩</span>
+                <div class="breadcrumb-item breadcrumb-current flex gap-1 items-center">
+                    <span class="text-xs text-gray-500">快篩結果</span>
                 </div>
             </template>
         </div>
 
-        <!-- 搜尋 (只在商品列表頁顯示) -->
-        <div v-if="navState.storeType || navState.dietMode" class="relative">
+        <!-- 搜尋 (在列表模式下顯示) -->
+        <div v-if="showProductList" class="relative">
             <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i>
             <input type="text" v-model="searchQuery" placeholder="搜尋列表中的商品..." class="input-std pl-10 py-2.5 text-sm">
         </div>
@@ -232,53 +245,48 @@
             <p class="text-sm">正在同步社群資料...</p>
         </div>
 
-        <!-- Level 1: 首頁 (資料夾 + 飲食快篩) -->
-        <div v-else-if="!navState.region && !navState.dietMode" class="space-y-6 animate-slide-up">
+        <div v-else>
             
-            <!-- 新增：飲食習慣快篩 (改為 3x2 格) -->
-            <section>
-                <h3 class="font-bold text-slate-700 mb-3 px-1 flex items-center gap-2">
-                    <i class="fa-solid fa-utensils text-orange-400"></i> 飲食習慣快篩
-                </h3>
-                <div class="grid grid-cols-3 gap-3">
-                    <!-- 第一排：基礎單項 -->
-                    <div @click="setDietMode('no-gluten')" class="diet-card bg-amber-50 border-amber-100 text-amber-700">
+            <!-- 區塊 A: 飲食習慣快篩 (只在首頁/無地區選擇時顯示，且一直保留) -->
+            <section v-if="!navState.region" class="space-y-3 mb-6 animate-slide-up">
+                <div class="flex justify-between items-center px-1">
+                    <h3 class="font-bold text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-utensils text-orange-400"></i> 飲食快篩 (可複選)
+                    </h3>
+                    <button v-if="navState.selectedDiets.length > 0" @click="resetView" class="text-xs text-gray-400 hover:text-orange-500">
+                        <i class="fa-solid fa-rotate-left"></i> 重置條件
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div @click="toggleDietFilter('no-gluten')" 
+                         :class="['diet-card opt-gluten', navState.selectedDiets.includes('no-gluten') ? 'active' : '']">
                         <i class="fa-solid fa-wheat-awn-circle-exclamation text-xl mb-1"></i>
                         <span class="text-xs font-bold">無麩質</span>
                     </div>
-                    <div @click="setDietMode('no-dairy')" class="diet-card bg-blue-50 border-blue-100 text-blue-700">
+                    
+                    <div @click="toggleDietFilter('no-dairy')" 
+                         :class="['diet-card opt-dairy', navState.selectedDiets.includes('no-dairy') ? 'active' : '']">
                         <i class="fa-solid fa-cow text-xl mb-1"></i>
                         <span class="text-xs font-bold">無奶</span>
                     </div>
-                    <div @click="setDietMode('no-egg')" class="diet-card bg-yellow-50 border-yellow-100 text-yellow-700">
+                    
+                    <div @click="toggleDietFilter('no-egg')" 
+                         :class="['diet-card opt-egg', navState.selectedDiets.includes('no-egg') ? 'active' : '']">
                         <i class="fa-solid fa-egg text-xl mb-1"></i>
                         <span class="text-xs font-bold">無蛋</span>
                     </div>
 
-                    <!-- 第二排：複合項目 -->
-                    <div @click="setDietMode('double-free')" class="diet-card bg-purple-50 border-purple-100 text-purple-700">
-                        <div class="flex gap-1 mb-1">
-                            <i class="fa-solid fa-cow"></i>
-                            <i class="fa-solid fa-wheat-awn"></i>
-                        </div>
-                        <span class="text-xs font-bold">無奶麩</span>
-                    </div>
-                    <div @click="setDietMode('egg-gluten-free')" class="diet-card bg-lime-50 border-lime-100 text-lime-700">
-                        <div class="flex gap-1 mb-1">
-                            <i class="fa-solid fa-egg"></i>
-                            <i class="fa-solid fa-wheat-awn"></i>
-                        </div>
-                        <span class="text-xs font-bold">無蛋麩</span>
-                    </div>
-                    <div @click="setDietMode('triple-free')" class="diet-card bg-rose-50 border-rose-100 text-rose-700">
-                        <i class="fa-solid fa-shield-heart text-xl mb-1"></i>
-                        <span class="text-xs font-bold">無蛋奶麩</span>
+                    <div @click="toggleDietFilter('no-additive')" 
+                         :class="['diet-card opt-additive', navState.selectedDiets.includes('no-additive') ? 'active' : '']">
+                        <i class="fa-solid fa-leaf text-xl mb-1"></i>
+                        <span class="text-xs font-bold">0項添加物</span>
                     </div>
                 </div>
             </section>
 
-            <!-- 地區瀏覽 -->
-            <section>
+            <!-- 區塊 B: 地區資料夾 (只在 無地區選取 且 無篩選條件 時顯示) -->
+            <section v-if="!navState.region && navState.selectedDiets.length === 0" class="animate-slide-up">
                 <h3 class="font-bold text-slate-700 mb-3 px-1 flex items-center gap-2">
                     <i class="fa-solid fa-earth-asia text-orange-400"></i> 依地區瀏覽
                 </h3>
@@ -292,109 +300,113 @@
                 </div>
             </section>
 
-        </div>
-
-        <!-- Level 2: 商店類型資料夾 (Selected Region) -->
-        <div v-else-if="navState.region && !navState.storeType" class="grid grid-cols-2 gap-4 animate-slide-up">
-            <div v-for="type in storeTypes" :key="type.value" @click="navState.storeType = type.value" class="folder-card">
-                <span class="folder-count">{{ getStoreTypeCount(navState.region, type.value) }}</span>
-                <i :class="type.icon + ' folder-icon'"></i>
-                <h3 class="font-bold text-base text-slate-800">{{ type.label }}</h3>
-                <p class="text-[10px] text-gray-400 mt-1 px-1 leading-tight">{{ type.desc }}</p>
-            </div>
-        </div>
-
-        <!-- Level 3: 商品列表 (Region+StoreType OR DietMode) -->
-        <div v-else class="space-y-4 animate-slide-up">
-            
-            <div v-if="filteredProducts.length === 0" class="text-center py-20 text-gray-400">
-                <i class="fa-solid fa-cookie-bite text-4xl mb-3 text-orange-200"></i>
-                <p>這裡還沒有商品</p>
-                <p v-if="navState.dietMode" class="text-xs mt-1">目前沒有符合此飲食條件的分享</p>
-                <p v-else class="text-xs mt-1">按右下角 + 分享第一個吧！</p>
-            </div>
-
-            <div v-for="product in filteredProducts" :key="product.id" class="card p-4 flex flex-col gap-3 group relative overflow-hidden">
-                <!-- 地區標籤 (如果是飲食模式顯示，就顯示地區標籤) -->
-                <div v-if="navState.dietMode" class="absolute top-0 right-0 bg-orange-100 text-orange-600 text-[10px] font-bold px-3 py-1 rounded-bl-xl z-10">
-                    {{ product.region }}
-                </div>
-
-                <!-- 商品頭部 -->
-                <div class="flex gap-3 relative">
-                    <div class="w-20 h-20 rounded-xl bg-gray-100 shrink-0 overflow-hidden cursor-pointer" @click="viewImage(product.frontImage)">
-                        <img :src="product.frontImage" class="w-full h-full object-cover">
-                    </div>
-                    <div class="flex-1 min-w-0 pr-8">
-                        <div class="flex flex-col">
-                            <h3 class="font-bold text-slate-800 text-lg leading-tight truncate mb-1">{{ product.name }}</h3>
-                            
-                            <!-- 飲食標籤顯示 -->
-                            <div class="mb-1 flex flex-wrap gap-1">
-                                <!-- 既有標籤 -->
-                                <span v-if="product.dietary === 'no-dairy'" class="inline-flex items-center gap-1 text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold">
-                                    <i class="fa-solid fa-cow"></i> 無奶
-                                </span>
-                                <span v-else-if="product.dietary === 'no-gluten'" class="inline-flex items-center gap-1 text-[10px] bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-bold">
-                                    <i class="fa-solid fa-wheat-awn-circle-exclamation"></i> 無麩
-                                </span>
-                                <span v-else-if="product.dietary === 'double-free'" class="inline-flex items-center gap-1 text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-bold">
-                                    <i class="fa-solid fa-check-double"></i> 無奶麩
-                                </span>
-                                
-                                <!-- 新增標籤 -->
-                                <span v-else-if="product.dietary === 'no-egg'" class="inline-flex items-center gap-1 text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold">
-                                    <i class="fa-solid fa-egg"></i> 無蛋
-                                </span>
-                                <span v-else-if="product.dietary === 'egg-gluten-free'" class="inline-flex items-center gap-1 text-[10px] bg-lime-100 text-lime-700 px-2 py-0.5 rounded-full font-bold">
-                                    <i class="fa-solid fa-wheat-awn"></i><i class="fa-solid fa-egg"></i> 無蛋麩
-                                </span>
-                                <span v-else-if="product.dietary === 'triple-free'" class="inline-flex items-center gap-1 text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold">
-                                    <i class="fa-solid fa-shield-heart"></i> 無蛋奶麩
-                                </span>
-                            </div>
-
-                            <div class="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
-                                <span class="bg-gray-100 px-2 py-0.5 rounded-md text-orange-500 font-bold truncate max-w-[140px]">
-                                    <i class="fa-solid fa-location-dot mr-1"></i>{{ product.location }}
-                                </span>
-                                <span class="bg-gray-100 px-2 py-0.5 rounded-md">{{ product.category }}</span>
-                            </div>
-                            <div class="mt-2 font-bold text-orange-600">
-                                約 NT$ {{ product.price }}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 編輯/刪除按鈕 -->
-                    <div class="absolute right-0 top-6 flex flex-col gap-2">
-                       <button @click="editProduct(product)" class="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-100 transition shadow-sm">
-                           <i class="fa-solid fa-pen text-xs"></i>
-                       </button>
-                       <button @click="confirmDelete(product.id)" class="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition shadow-sm">
-                           <i class="fa-solid fa-trash text-xs"></i>
-                       </button>
+            <!-- 區塊 C: 商店類型資料夾 (只在 有地區選取 且 無商店選取 時顯示) -->
+            <section v-if="navState.region && !navState.storeType" class="animate-slide-up">
+                <div class="grid grid-cols-2 gap-4">
+                    <div v-for="type in storeTypes" :key="type.value" @click="navState.storeType = type.value" class="folder-card">
+                        <span class="folder-count">{{ getStoreTypeCount(navState.region, type.value) }}</span>
+                        <i :class="type.icon + ' folder-icon'"></i>
+                        <h3 class="font-bold text-base text-slate-800">{{ type.label }}</h3>
+                        <p class="text-[10px] text-gray-400 mt-1 px-1 leading-tight">{{ type.desc }}</p>
                     </div>
                 </div>
+            </section>
 
-                <!-- 成分表 -->
-                <div class="bg-orange-50/50 rounded-xl p-3 border border-orange-100 cursor-pointer hover:bg-orange-50 transition" @click="viewImage(product.ingredientImage)">
-                    <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                        <i class="fa-solid fa-list-check text-orange-400"></i>
-                        <span>成分表 (點擊放大檢查)</span>
-                    </div>
-                    <div class="h-16 w-full rounded-lg overflow-hidden relative">
-                        <img :src="product.ingredientImage" class="w-full h-full object-cover opacity-80 hover:opacity-100 transition">
-                        <div class="absolute inset-0 flex items-center justify-center bg-black/5">
-                            <i class="fa-solid fa-magnifying-glass-plus text-white drop-shadow-md"></i>
-                        </div>
-                    </div>
-                </div>
+            <!-- 區塊 D: 商品列表 (當 滿足快篩條件 或 滿足地區/商店選擇 時顯示) -->
+            <section v-if="showProductList" class="space-y-4 animate-slide-up">
                 
-                <div class="text-[10px] text-gray-300 text-right">
-                    由 {{ product.uploaderId ? product.uploaderId.substring(0,6) + '...' : '匿名旅人' }} 分享
+                <!-- 結果標題與數量 -->
+                <div class="flex items-center justify-between px-1 mb-2">
+                    <h3 class="font-bold text-slate-800">
+                        {{ filteredProducts.length }} 項符合的商品
+                    </h3>
+                    <!-- 提示文字 -->
+                    <span v-if="!navState.region && navState.selectedDiets.length > 0" class="text-xs text-orange-500 font-bold">
+                        <i class="fa-solid fa-check"></i> 依選取條件過濾中
+                    </span>
                 </div>
-            </div>
+
+                <div v-if="filteredProducts.length === 0" class="text-center py-20 text-gray-400 bg-white rounded-2xl border border-dashed border-gray-200">
+                    <i class="fa-solid fa-cookie-bite text-4xl mb-3 text-orange-200"></i>
+                    <p>沒有符合條件的商品</p>
+                    <p v-if="navState.selectedDiets.length > 0" class="text-xs mt-1">試著減少一些篩選條件？</p>
+                    <p v-else class="text-xs mt-1">按右下角 + 分享第一個吧！</p>
+                </div>
+
+                <div v-for="product in filteredProducts" :key="product.id" class="card p-4 flex flex-col gap-3 group relative overflow-hidden">
+                    <!-- 地區標籤 (如果是快篩模式，需顯示地區) -->
+                    <div v-if="!navState.region" class="absolute top-0 right-0 bg-orange-100 text-orange-600 text-[10px] font-bold px-3 py-1 rounded-bl-xl z-10">
+                        {{ product.region }}
+                    </div>
+
+                    <!-- 商品頭部 -->
+                    <div class="flex gap-3 relative">
+                        <div class="w-20 h-20 rounded-xl bg-gray-100 shrink-0 overflow-hidden cursor-pointer" @click="viewImage(product.frontImage)">
+                            <img :src="product.frontImage" class="w-full h-full object-cover">
+                        </div>
+                        <div class="flex-1 min-w-0 pr-8">
+                            <div class="flex flex-col">
+                                <h3 class="font-bold text-slate-800 text-lg leading-tight truncate mb-1">{{ product.name }}</h3>
+                                
+                                <!-- 飲食標籤顯示 -->
+                                <div class="mb-1 flex flex-wrap gap-1">
+                                    <span v-if="hasDietTag(product, 'no-gluten')" class="inline-flex items-center gap-1 text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">
+                                        <i class="fa-solid fa-wheat-awn-circle-exclamation"></i> 無麩
+                                    </span>
+                                    <span v-if="hasDietTag(product, 'no-dairy')" class="inline-flex items-center gap-1 text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+                                        <i class="fa-solid fa-cow"></i> 無奶
+                                    </span>
+                                    <span v-if="hasDietTag(product, 'no-egg')" class="inline-flex items-center gap-1 text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold">
+                                        <i class="fa-solid fa-egg"></i> 無蛋
+                                    </span>
+                                    <span v-if="hasDietTag(product, 'no-additive')" class="inline-flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
+                                        <i class="fa-solid fa-leaf"></i> 0添加
+                                    </span>
+                                </div>
+
+                                <div class="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
+                                    <span class="bg-gray-100 px-2 py-0.5 rounded-md text-orange-500 font-bold truncate max-w-[140px]">
+                                        <i class="fa-solid fa-location-dot mr-1"></i>{{ product.location }}
+                                    </span>
+                                    <span class="bg-gray-100 px-2 py-0.5 rounded-md">{{ product.category }}</span>
+                                </div>
+                                <div class="mt-2 font-bold text-orange-600">
+                                    約 NT$ {{ product.price }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 編輯/刪除按鈕 -->
+                        <div class="absolute right-0 top-6 flex flex-col gap-2">
+                           <button @click="editProduct(product)" class="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-100 transition shadow-sm">
+                               <i class="fa-solid fa-pen text-xs"></i>
+                           </button>
+                           <button @click="confirmDelete(product.id)" class="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition shadow-sm">
+                               <i class="fa-solid fa-trash text-xs"></i>
+                           </button>
+                        </div>
+                    </div>
+
+                    <!-- 成分表 -->
+                    <div class="bg-orange-50/50 rounded-xl p-3 border border-orange-100 cursor-pointer hover:bg-orange-50 transition" @click="viewImage(product.ingredientImage)">
+                        <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                            <i class="fa-solid fa-list-check text-orange-400"></i>
+                            <span>成分表 (點擊放大檢查)</span>
+                        </div>
+                        <div class="h-16 w-full rounded-lg overflow-hidden relative">
+                            <img :src="product.ingredientImage" class="w-full h-full object-cover opacity-80 hover:opacity-100 transition">
+                            <div class="absolute inset-0 flex items-center justify-center bg-black/5">
+                                <i class="fa-solid fa-magnifying-glass-plus text-white drop-shadow-md"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-[10px] text-gray-300 text-right">
+                        由 {{ product.uploaderId ? product.uploaderId.substring(0,6) + '...' : '匿名旅人' }} 分享
+                    </div>
+                </div>
+            </section>
+
         </div>
 
     </main>
@@ -442,41 +454,37 @@
                     </div>
                 </div>
 
-                <!-- 飲食標籤 (更新為 6 選項) -->
+                <!-- 飲食標籤 (複選模式) -->
                 <div>
-                    <label class="text-xs font-bold text-gray-500 mb-2 block">飲食標籤 <span class="text-red-400">*</span></label>
-                    <div class="grid grid-cols-3 gap-2">
-                        <!-- 既有 -->
-                        <div @click="form.dietary = 'no-gluten'" :class="['diet-option', form.dietary === 'no-gluten' ? 'active' : 'bg-gray-50']">
+                    <label class="text-xs font-bold text-gray-500 mb-2 block">飲食標籤 (可複選) <span class="text-red-400">*</span></label>
+                    <div class="grid grid-cols-4 gap-2">
+                        
+                        <div @click="toggleFormDietary('no-gluten')" 
+                             :class="['diet-option', form.dietary.includes('no-gluten') ? 'selected' : 'bg-gray-50']">
                             <div class="text-xl mb-1"><i class="fa-solid fa-wheat-awn-circle-exclamation"></i></div>
-                            <div class="text-xs font-bold">無麩</div>
-                        </div>
-                        <div @click="form.dietary = 'no-dairy'" :class="['diet-option', form.dietary === 'no-dairy' ? 'active' : 'bg-gray-50']">
-                            <div class="text-xl mb-1"><i class="fa-solid fa-cow"></i></div>
-                            <div class="text-xs font-bold">無奶</div>
-                        </div>
-                        <!-- 新增: 無蛋 -->
-                        <div @click="form.dietary = 'no-egg'" :class="['diet-option', form.dietary === 'no-egg' ? 'active' : 'bg-gray-50']">
-                            <div class="text-xl mb-1"><i class="fa-solid fa-egg"></i></div>
-                            <div class="text-xs font-bold">無蛋</div>
+                            <div class="text-xs">無麩</div>
                         </div>
                         
-                        <!-- 複合 -->
-                        <div @click="form.dietary = 'double-free'" :class="['diet-option', form.dietary === 'double-free' ? 'active' : 'bg-gray-50']">
-                            <div class="text-sm mb-1"><i class="fa-solid fa-cow"></i><i class="fa-solid fa-wheat-awn"></i></div>
-                            <div class="text-xs font-bold">無奶麩</div>
+                        <div @click="toggleFormDietary('no-dairy')" 
+                             :class="['diet-option', form.dietary.includes('no-dairy') ? 'selected' : 'bg-gray-50']">
+                            <div class="text-xl mb-1"><i class="fa-solid fa-cow"></i></div>
+                            <div class="text-xs">無奶</div>
                         </div>
-                        <!-- 新增: 無蛋麩 -->
-                        <div @click="form.dietary = 'egg-gluten-free'" :class="['diet-option', form.dietary === 'egg-gluten-free' ? 'active' : 'bg-gray-50']">
-                            <div class="text-sm mb-1"><i class="fa-solid fa-egg"></i><i class="fa-solid fa-wheat-awn"></i></div>
-                            <div class="text-xs font-bold">無蛋麩</div>
+                        
+                        <div @click="toggleFormDietary('no-egg')" 
+                             :class="['diet-option', form.dietary.includes('no-egg') ? 'selected' : 'bg-gray-50']">
+                            <div class="text-xl mb-1"><i class="fa-solid fa-egg"></i></div>
+                            <div class="text-xs">無蛋</div>
                         </div>
-                        <!-- 新增: 無蛋奶麩 -->
-                        <div @click="form.dietary = 'triple-free'" :class="['diet-option', form.dietary === 'triple-free' ? 'active' : 'bg-gray-50']">
-                            <div class="text-xl mb-1"><i class="fa-solid fa-shield-heart"></i></div>
-                            <div class="text-xs font-bold">無蛋奶麩</div>
+
+                        <div @click="toggleFormDietary('no-additive')" 
+                             :class="['diet-option', form.dietary.includes('no-additive') ? 'selected' : 'bg-gray-50']">
+                            <div class="text-xl mb-1"><i class="fa-solid fa-leaf"></i></div>
+                            <div class="text-xs">0添加</div>
                         </div>
+
                     </div>
+                    <p class="text-[10px] text-gray-400 mt-1">* 0添加：指無任何食品添加物</p>
                 </div>
 
                 <!-- 2. 基本資訊 -->
@@ -617,7 +625,7 @@
             const navState = reactive({
                 region: null,      
                 storeType: null,   
-                dietMode: null     
+                selectedDiets: [] 
             });
 
             // Constants
@@ -642,7 +650,7 @@
                 price: null,
                 frontImage: null, 
                 ingredientImage: null,
-                dietary: 'no-gluten'
+                dietary: ['no-gluten'] // default array
             });
             const showLocSuggestions = ref(false);
 
@@ -686,11 +694,26 @@
                         return { 
                             id: doc.id, 
                             ...data,
-                            storeType: data.storeType || inferStoreType(data.location)
+                            storeType: data.storeType || inferStoreType(data.location),
+                            dietaryArray: normalizeDietary(data.dietary)
                         };
                     });
                     loading.value = false;
                 });
+            };
+
+            const normalizeDietary = (d) => {
+                if (Array.isArray(d)) return d;
+                if (!d) return ['no-gluten']; 
+                switch(d) {
+                    case 'no-gluten': return ['no-gluten'];
+                    case 'no-dairy': return ['no-dairy'];
+                    case 'no-egg': return ['no-egg'];
+                    case 'double-free': return ['no-gluten', 'no-dairy'];
+                    case 'egg-gluten-free': return ['no-gluten', 'no-egg'];
+                    case 'triple-free': return ['no-gluten', 'no-dairy', 'no-egg'];
+                    default: return [d];
+                }
             };
 
             const inferStoreType = (loc) => {
@@ -704,71 +727,77 @@
                 return 'other';
             };
 
-            // Navigation Helpers
             const resetView = () => {
                 navState.region = null;
                 navState.storeType = null;
-                navState.dietMode = null; 
+                navState.selectedDiets = [];
                 searchQuery.value = '';
             };
 
-            const setDietMode = (mode) => {
+            const toggleDietFilter = (tag) => {
                 navState.region = null; 
                 navState.storeType = null;
-                navState.dietMode = mode;
+                const idx = navState.selectedDiets.indexOf(tag);
+                if (idx > -1) {
+                    navState.selectedDiets.splice(idx, 1);
+                } else {
+                    navState.selectedDiets.push(tag);
+                }
                 searchQuery.value = '';
+            };
+
+            const toggleFormDietary = (tag) => {
+                const idx = form.dietary.indexOf(tag);
+                if (idx > -1) {
+                    if (form.dietary.length > 1) form.dietary.splice(idx, 1);
+                } else {
+                    form.dietary.push(tag);
+                }
             };
 
             const getRegionCount = (reg) => products.value.filter(p => p.region === reg).length;
             const getStoreTypeCount = (reg, type) => products.value.filter(p => p.region === reg && p.storeType === type).length;
             const getStoreTypeLabel = (typeVal) => storeTypes.find(t => t.value === typeVal)?.label || typeVal;
+            const getDietLabel = (tag) => {
+                const map = { 'no-gluten': '無麩', 'no-dairy': '無奶', 'no-egg': '無蛋', 'no-additive': '0添加' };
+                return map[tag] || tag;
+            };
 
-            // Filter Logic
+            const hasDietTag = (product, tag) => {
+                return product.dietaryArray && product.dietaryArray.includes(tag);
+            };
+
+            // Logic to determine if product list should be shown
+            const showProductList = computed(() => {
+                // Case 1: Region Drilldown
+                if (navState.region && navState.storeType) return true;
+                // Case 2: Diet Filters Active on Home (and no region selected)
+                if (!navState.region && navState.selectedDiets.length > 0) return true;
+                
+                return false;
+            });
+
             const filteredProducts = computed(() => {
-                // 情境 A: 飲食快篩模式
-                if (navState.dietMode) {
+                // Logic A: Diet Filter Mode
+                if (!navState.region && navState.selectedDiets.length > 0) {
                     return products.value.filter(p => {
-                        const d = p.dietary;
-                        // 判斷邏輯:
-                        // No Gluten (無麩): no-gluten, double-free, egg-gluten-free, triple-free
-                        // No Dairy (無奶): no-dairy, double-free, triple-free
-                        // No Egg (無蛋): no-egg, egg-gluten-free, triple-free
-                        
-                        const isNoGluten = ['no-gluten', 'double-free', 'egg-gluten-free', 'triple-free'].includes(d);
-                        const isNoDairy = ['no-dairy', 'double-free', 'triple-free'].includes(d); 
-                        const isNoEgg = ['no-egg', 'egg-gluten-free', 'triple-free'].includes(d);
-
-                        // 複合選項邏輯 (嚴格匹配該類型或更嚴格的類型)
-                        // 無奶麩 (G+D Free): double-free, triple-free
-                        const isDoubleFree = ['double-free', 'triple-free'].includes(d);
-                        // 無蛋麩 (G+E Free): egg-gluten-free, triple-free
-                        const isEggGlutenFree = ['egg-gluten-free', 'triple-free'].includes(d);
-                        // 無蛋奶麩 (G+D+E Free): triple-free
-                        const isTripleFree = d === 'triple-free';
-
-                        let matchDiet = false;
-                        if (navState.dietMode === 'no-gluten') matchDiet = isNoGluten;
-                        else if (navState.dietMode === 'no-dairy') matchDiet = isNoDairy;
-                        else if (navState.dietMode === 'no-egg') matchDiet = isNoEgg;
-                        else if (navState.dietMode === 'double-free') matchDiet = isDoubleFree;
-                        else if (navState.dietMode === 'egg-gluten-free') matchDiet = isEggGlutenFree;
-                        else if (navState.dietMode === 'triple-free') matchDiet = isTripleFree;
-
+                        const hasAllTags = navState.selectedDiets.every(tag => p.dietaryArray.includes(tag));
                         const matchSearch = !searchQuery.value || (p.name + p.location + p.region).toLowerCase().includes(searchQuery.value.toLowerCase());
-                        
-                        return matchDiet && matchSearch;
+                        return hasAllTags && matchSearch;
                     });
                 }
 
-                // 情境 B: 地區導航模式
-                if (!navState.region || !navState.storeType) return [];
-                
-                return products.value.filter(p => {
-                    const matchRegion = p.region === navState.region;
-                    const matchType = p.storeType === navState.storeType;
-                    const matchSearch = !searchQuery.value || (p.name + p.location).toLowerCase().includes(searchQuery.value.toLowerCase());
-                    return matchRegion && matchType && matchSearch;
-                });
+                // Logic B: Region Mode
+                if (navState.region && navState.storeType) {
+                    return products.value.filter(p => {
+                        const matchRegion = p.region === navState.region;
+                        const matchType = p.storeType === navState.storeType;
+                        const matchSearch = !searchQuery.value || (p.name + p.location).toLowerCase().includes(searchQuery.value.toLowerCase());
+                        return matchRegion && matchType && matchSearch;
+                    });
+                }
+
+                return [];
             });
 
             // Form & Actions
@@ -776,10 +805,9 @@
                 editingId.value = null;
                 const defaultRegion = navState.region || '台灣';
                 const defaultType = navState.storeType || 'convenience';
-                
                 Object.assign(form, { 
                     name: '', region: defaultRegion, storeType: defaultType, category: '零食', location: '', price: null, 
-                    frontImage: null, ingredientImage: null, dietary: 'no-gluten' 
+                    frontImage: null, ingredientImage: null, dietary: ['no-gluten'] 
                 });
                 showUpload.value = true;
             };
@@ -795,7 +823,7 @@
                     price: product.price,
                     frontImage: product.frontImage,
                     ingredientImage: product.ingredientImage,
-                    dietary: product.dietary || 'no-gluten'
+                    dietary: [...product.dietaryArray] 
                 });
                 showUpload.value = true;
             };
@@ -820,9 +848,9 @@
                         alert("發布成功");
                     }
                     closeUpload();
-                    navState.dietMode = null;
-                    navState.region = form.region;
-                    navState.storeType = form.storeType;
+                    // Reset Logic: If in drilldown, stay. If in filter mode, clear to avoid confusion? 
+                    // Let's just clear everything to "Home" to show the clean state.
+                    resetView(); 
                 } catch(e) {
                     alert("失敗: " + e.message);
                 } finally {
@@ -873,9 +901,9 @@
             return {
                 showUpload, showConfig, viewingImg, loading, isSubmitting, statusMsg, firebaseConfigInput,
                 navState, regions, storeTypes, 
-                filteredProducts, suggestedLocations, showLocSuggestions, hideSuggestions, searchQuery,
+                filteredProducts, showProductList, suggestedLocations, showLocSuggestions, hideSuggestions, searchQuery,
                 form, editingId,
-                resetView, setDietMode, getRegionCount, getStoreTypeCount, getStoreTypeLabel,
+                resetView, toggleDietFilter, toggleFormDietary, getRegionCount, getStoreTypeCount, getStoreTypeLabel, getDietLabel, hasDietTag,
                 saveConfig, resetToDefault, handleImage, submitProduct, openUploadModal, editProduct, confirmDelete, closeUpload, viewImage
             };
         }
