@@ -49,6 +49,23 @@
             box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.1);
         }
 
+        /* 篩選用的小下拉選單 */
+        .select-sm {
+            background: #fff;
+            border: 1px solid #fed7aa;
+            border-radius: 12px;
+            padding: 8px 12px;
+            font-size: 13px;
+            color: #431407;
+            outline: none;
+            width: 100%;
+            appearance: none; /* 移除預設箭頭，可自訂 */
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23fb923c' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+        }
+
         /* 資料夾卡片樣式 */
         .folder-card {
             background: white;
@@ -245,10 +262,24 @@
             </template>
         </div>
 
-        <!-- 搜尋 (在列表模式下顯示) -->
-        <div v-if="showProductList" class="relative">
-            <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i>
-            <input type="text" v-model="searchQuery" placeholder="搜尋列表中的商品..." class="input-std pl-10 py-2.5 text-sm">
+        <!-- 搜尋與進階篩選 (在列表模式下顯示) -->
+        <div v-if="showProductList" class="space-y-2 pb-2 animate-slide-up">
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i>
+                <input type="text" v-model="searchQuery" placeholder="搜尋列表中的商品..." class="input-std pl-10 py-2.5 text-sm">
+            </div>
+            
+            <!-- 新增：地區與類別篩選下拉選單 -->
+            <div class="flex gap-2">
+                <select v-model="navState.filterRegion" class="select-sm flex-1">
+                    <option value="">🌏 所有地區</option>
+                    <option v-for="r in regions" :key="r" :value="r">{{ r }}</option>
+                </select>
+                <select v-model="navState.filterCategory" class="select-sm flex-1">
+                    <option value="">📦 所有類別</option>
+                    <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+                </select>
+            </div>
         </div>
     </header>
 
@@ -273,7 +304,6 @@
                     </button>
                 </div>
                 
-                <!-- 調整 grid 為 3 欄，以容納 5 個選項 -->
                 <div class="grid grid-cols-3 gap-3">
                     <div @click="toggleDietFilter('no-gluten')" 
                          :class="['diet-card opt-gluten', navState.selectedDiets.includes('no-gluten') ? 'active' : '']">
@@ -293,7 +323,6 @@
                         <span class="text-xs font-bold">無蛋</span>
                     </div>
 
-                    <!-- 新增: 無黃豆 -->
                     <div @click="toggleDietFilter('no-soy')" 
                          :class="['diet-card opt-soy', navState.selectedDiets.includes('no-soy') ? 'active' : '']">
                         <i class="fa-solid fa-seedling text-xl mb-1"></i>
@@ -343,16 +372,18 @@
                     <h3 class="font-bold text-slate-800">
                         {{ filteredProducts.length }} 項符合的商品
                     </h3>
-                    <!-- 提示文字 -->
-                    <span v-if="!navState.region && navState.selectedDiets.length > 0" class="text-xs text-orange-500 font-bold">
-                        <i class="fa-solid fa-check"></i> 依選取條件過濾中
-                    </span>
+                    <div class="flex items-center gap-2">
+                        <!-- 提示排序規則 -->
+                        <span class="text-[10px] text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
+                            <i class="fa-solid fa-arrow-down-short-wide"></i> 地區>地點>類別
+                        </span>
+                    </div>
                 </div>
 
                 <div v-if="filteredProducts.length === 0" class="text-center py-20 text-gray-400 bg-white rounded-2xl border border-dashed border-gray-200">
                     <i class="fa-solid fa-cookie-bite text-4xl mb-3 text-orange-200"></i>
                     <p>沒有符合條件的商品</p>
-                    <p v-if="navState.selectedDiets.length > 0" class="text-xs mt-1">試著減少一些篩選條件？</p>
+                    <p v-if="navState.selectedDiets.length > 0 || navState.filterRegion || navState.filterCategory" class="text-xs mt-1">試著減少一些篩選條件？</p>
                     <p v-else class="text-xs mt-1">按右下角 + 分享第一個吧！</p>
                 </div>
 
@@ -373,7 +404,6 @@
                                 
                                 <!-- 飲食標籤顯示 -->
                                 <div class="mb-1 flex flex-wrap gap-1">
-                                    <!-- 修改: 無麩質改為 Rose 色系 -->
                                     <span v-if="hasDietTag(product, 'no-gluten')" class="inline-flex items-center gap-1 text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold">
                                         <i class="fa-solid fa-wheat-awn-circle-exclamation"></i> 無麩
                                     </span>
@@ -383,7 +413,6 @@
                                     <span v-if="hasDietTag(product, 'no-egg')" class="inline-flex items-center gap-1 text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold">
                                         <i class="fa-solid fa-egg"></i> 無蛋
                                     </span>
-                                    <!-- 新增: 無黃豆 -->
                                     <span v-if="hasDietTag(product, 'no-soy')" class="inline-flex items-center gap-1 text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
                                         <i class="fa-solid fa-seedling"></i> 無黃豆
                                     </span>
@@ -505,7 +534,7 @@
                             <div class="text-xs">無蛋</div>
                         </div>
 
-                        <!-- 新增: 無黃豆選項 -->
+                        <!-- 無黃豆選項 -->
                         <div @click="toggleFormDietary('no-soy')" 
                              :class="['diet-option', form.dietary.includes('no-soy') ? 'selected' : 'bg-gray-50']">
                             <div class="text-xl mb-1"><i class="fa-solid fa-seedling"></i></div>
@@ -532,11 +561,7 @@
                 <div>
                     <label class="text-xs font-bold text-gray-500 mb-1">商品分類</label>
                     <select v-model="form.category" class="input-std bg-white">
-                        <option value="零食">🍪 零食/點心</option>
-                        <option value="主食">🍜 麵/飯/麵包</option>
-                        <option value="醬料">🥣 醬料/調味</option>
-                        <option value="飲品">🥤 飲料/酒</option>
-                        <option value="其他">📦 其他</option>
+                        <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
                     </select>
                 </div>
 
@@ -544,11 +569,7 @@
                     <div>
                         <label class="text-xs font-bold text-gray-500 mb-1">地區</label>
                         <select v-model="form.region" class="input-std bg-white">
-                            <option value="台灣">🇹🇼 台灣</option>
-                            <option value="日本">🇯🇵 日本</option>
-                            <option value="韓國">🇰🇷 韓國</option>
-                            <option value="歐美">🇺🇸 歐美</option>
-                            <option value="其他">🌏 其他</option>
+                            <option v-for="r in regions" :key="r" :value="r">{{ r }}</option>
                         </select>
                     </div>
                     <div>
@@ -660,11 +681,14 @@
             const navState = reactive({
                 region: null,      
                 storeType: null,   
-                selectedDiets: [] 
+                selectedDiets: [],
+                filterRegion: '', // 搜尋時的地區篩選
+                filterCategory: '' // 搜尋時的類別篩選
             });
 
             // Constants
             const regions = ['台灣', '日本', '韓國', '歐美', '其他'];
+            const categories = ['零食', '主食', '醬料', '飲品', '其他'];
             const storeTypes = [
                 { value: 'convenience', label: '便利商店', icon: 'fa-solid fa-store', desc: '7-11, 全家, Lawson' },
                 { value: 'supermarket', label: '超市/大賣場', icon: 'fa-solid fa-cart-shopping', desc: '全聯, 家樂福, Aeon' },
@@ -766,6 +790,8 @@
                 navState.region = null;
                 navState.storeType = null;
                 navState.selectedDiets = [];
+                navState.filterRegion = '';
+                navState.filterCategory = '';
                 searchQuery.value = '';
             };
 
@@ -813,26 +839,48 @@
             });
 
             const filteredProducts = computed(() => {
-                // Logic A: Diet Filter Mode
+                let list = [];
+
+                // Step 1: Base Filter (Scenario A vs B)
                 if (!navState.region && navState.selectedDiets.length > 0) {
-                    return products.value.filter(p => {
-                        const hasAllTags = navState.selectedDiets.every(tag => p.dietaryArray.includes(tag));
-                        const matchSearch = !searchQuery.value || (p.name + p.location + p.region).toLowerCase().includes(searchQuery.value.toLowerCase());
-                        return hasAllTags && matchSearch;
+                    // Scenario A: Diet Filter Mode
+                    list = products.value.filter(p => {
+                        return navState.selectedDiets.every(tag => p.dietaryArray.includes(tag));
                     });
+                } else if (navState.region && navState.storeType) {
+                    // Scenario B: Region Mode
+                    list = products.value.filter(p => {
+                        return p.region === navState.region && p.storeType === navState.storeType;
+                    });
+                } else {
+                    return [];
                 }
 
-                // Logic B: Region Mode
-                if (navState.region && navState.storeType) {
-                    return products.value.filter(p => {
-                        const matchRegion = p.region === navState.region;
-                        const matchType = p.storeType === navState.storeType;
-                        const matchSearch = !searchQuery.value || (p.name + p.location).toLowerCase().includes(searchQuery.value.toLowerCase());
-                        return matchRegion && matchType && matchSearch;
-                    });
-                }
+                // Step 2: Apply Search & Advanced Filters (Region/Category dropdowns)
+                list = list.filter(p => {
+                    const matchSearch = !searchQuery.value || (p.name + p.location + p.region).toLowerCase().includes(searchQuery.value.toLowerCase());
+                    const matchFilterRegion = !navState.filterRegion || p.region === navState.filterRegion;
+                    const matchFilterCategory = !navState.filterCategory || p.category === navState.filterCategory;
+                    return matchSearch && matchFilterRegion && matchFilterCategory;
+                });
 
-                return [];
+                // Step 3: Automatic Sorting (Region > Location > Category > Timestamp)
+                return list.sort((a, b) => {
+                    // 1. Region
+                    if ((a.region || '') < (b.region || '')) return -1;
+                    if ((a.region || '') > (b.region || '')) return 1;
+                    
+                    // 2. Location (Alphabetical)
+                    if ((a.location || '') < (b.location || '')) return -1;
+                    if ((a.location || '') > (b.location || '')) return 1;
+
+                    // 3. Category
+                    if ((a.category || '') < (b.category || '')) return -1;
+                    if ((a.category || '') > (b.category || '')) return 1;
+
+                    // 4. Timestamp (Newest first)
+                    return (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0);
+                });
             });
 
             // Form & Actions
@@ -883,8 +931,6 @@
                         alert("發布成功");
                     }
                     closeUpload();
-                    // Reset Logic: If in drilldown, stay. If in filter mode, clear to avoid confusion? 
-                    // Let's just clear everything to "Home" to show the clean state.
                     resetView(); 
                 } catch(e) {
                     alert("失敗: " + e.message);
@@ -935,7 +981,7 @@
 
             return {
                 showUpload, showConfig, viewingImg, loading, isSubmitting, statusMsg, firebaseConfigInput,
-                navState, regions, storeTypes, 
+                navState, regions, storeTypes, categories,
                 filteredProducts, showProductList, suggestedLocations, showLocSuggestions, hideSuggestions, searchQuery,
                 form, editingId,
                 resetView, toggleDietFilter, toggleFormDietary, getRegionCount, getStoreTypeCount, getStoreTypeLabel, getDietLabel, hasDietTag,
