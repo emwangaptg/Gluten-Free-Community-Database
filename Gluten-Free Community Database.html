@@ -17,6 +17,7 @@
             background-color: #fff7ed; /* 溫暖的米色背景 */
             color: #431407;
             -webkit-tap-highlight-color: transparent;
+            overscroll-behavior: none; /* 防止手機下拉重整干擾 */
         }
         
         .card {
@@ -59,7 +60,7 @@
             color: #431407;
             outline: none;
             width: 100%;
-            appearance: none; /* 移除預設箭頭，可自訂 */
+            appearance: none; 
             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23fb923c' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
             background-position: right 0.5rem center;
             background-repeat: no-repeat;
@@ -111,13 +112,13 @@
         .diet-card:active { transform: scale(0.95); }
         
         /* 預設淺色背景 (未選取) */
-        .diet-card.opt-gluten { background-color: #fff1f2; color: #9f1239; } /* Rose-50, Rose-800 */
+        .diet-card.opt-gluten { background-color: #fff1f2; color: #9f1239; } /* Rose */
         .diet-card.opt-dairy { background-color: #eff6ff; color: #1e40af; } /* Blue */
         .diet-card.opt-egg { background-color: #fefce8; color: #854d0e; } /* Yellow */
-        .diet-card.opt-soy { background-color: #faf5ff; color: #6b21a8; } /* Purple (Soy) */
+        .diet-card.opt-soy { background-color: #faf5ff; color: #6b21a8; } /* Purple */
         .diet-card.opt-additive { background-color: #ecfdf5; color: #065f46; } /* Emerald */
 
-        /* 未選取時稍微透明/灰階，讓選取的更突出 */
+        /* 未選取時稍微透明/灰階 */
         .diet-card:not(.active) { opacity: 0.7; filter: grayscale(0.3); border: 1px solid transparent; }
         .diet-card:not(.active):hover { opacity: 1; filter: grayscale(0); transform: translateY(-1px); }
 
@@ -131,11 +132,10 @@
             font-weight: bold;
         }
         
-        /* 選取時的強調色 (Active Border & Background) */
         .diet-card.active.opt-gluten { border-color: #f43f5e; background-color: #ffe4e6; }
         .diet-card.active.opt-dairy { border-color: #3b82f6; background-color: #dbeafe; }
         .diet-card.active.opt-egg { border-color: #eab308; background-color: #fef9c3; }
-        .diet-card.active.opt-soy { border-color: #a855f7; background-color: #f3e8ff; } /* Purple */
+        .diet-card.active.opt-soy { border-color: #a855f7; background-color: #f3e8ff; } 
         .diet-card.active.opt-additive { border-color: #10b981; background-color: #d1fae5; }
 
         .img-box {
@@ -198,7 +198,6 @@
             font-weight: bold;
         }
 
-        /* 麵包屑導航 */
         .breadcrumb {
             display: flex;
             align-items: center;
@@ -235,11 +234,9 @@
             </div>
         </div>
 
-        <!-- 麵包屑導航 -->
         <div class="breadcrumb px-1 scrollbar-hide">
             <div class="breadcrumb-item" @click="resetView"><i class="fa-solid fa-house"></i> 首頁</div>
             
-            <!-- 路徑 A: 地區導航 (只在點選地區後顯示) -->
             <template v-if="navState.region">
                 <span class="breadcrumb-arrow"><i class="fa-solid fa-chevron-right"></i></span>
                 <div class="breadcrumb-item" @click="navState.storeType = null" :class="{'breadcrumb-current': !navState.storeType}">
@@ -253,7 +250,6 @@
                 </template>
             </template>
 
-            <!-- 路徑 B: 飲食快篩提示 (只顯示文字提示) -->
             <template v-if="!navState.region && navState.selectedDiets.length > 0">
                 <span class="breadcrumb-arrow"><i class="fa-solid fa-chevron-right"></i></span>
                 <div class="breadcrumb-item breadcrumb-current flex gap-1 items-center">
@@ -262,14 +258,12 @@
             </template>
         </div>
 
-        <!-- 搜尋與進階篩選 (在列表模式下顯示) -->
         <div v-if="showProductList" class="space-y-2 pb-2 animate-slide-up">
             <div class="relative">
                 <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i>
                 <input type="text" v-model="searchQuery" placeholder="搜尋列表中的商品..." class="input-std pl-10 py-2.5 text-sm">
             </div>
             
-            <!-- 新增：地區與類別篩選下拉選單 -->
             <div class="flex gap-2">
                 <select v-model="navState.filterRegion" class="select-sm flex-1">
                     <option value="">🌏 所有地區</option>
@@ -293,7 +287,6 @@
 
         <div v-else>
             
-            <!-- 區塊 A: 飲食習慣快篩 (只在首頁/無地區選擇時顯示，且一直保留) -->
             <section v-if="!navState.region" class="space-y-3 mb-6 animate-slide-up">
                 <div class="flex justify-between items-center px-1">
                     <h3 class="font-bold text-slate-700 flex items-center gap-2">
@@ -337,7 +330,6 @@
                 </div>
             </section>
 
-            <!-- 區塊 B: 地區資料夾 (只在 無地區選取 且 無篩選條件 時顯示) -->
             <section v-if="!navState.region && navState.selectedDiets.length === 0" class="animate-slide-up">
                 <h3 class="font-bold text-slate-700 mb-3 px-1 flex items-center gap-2">
                     <i class="fa-solid fa-earth-asia text-orange-400"></i> 依地區瀏覽
@@ -352,7 +344,6 @@
                 </div>
             </section>
 
-            <!-- 區塊 C: 商店類型資料夾 (只在 有地區選取 且 無商店選取 時顯示) -->
             <section v-if="navState.region && !navState.storeType" class="animate-slide-up">
                 <div class="grid grid-cols-2 gap-4">
                     <div v-for="type in storeTypes" :key="type.value" @click="navState.storeType = type.value" class="folder-card">
@@ -364,16 +355,13 @@
                 </div>
             </section>
 
-            <!-- 區塊 D: 商品列表 (當 滿足快篩條件 或 滿足地區/商店選擇 時顯示) -->
             <section v-if="showProductList" class="space-y-4 animate-slide-up">
                 
-                <!-- 結果標題與數量 -->
                 <div class="flex items-center justify-between px-1 mb-2">
                     <h3 class="font-bold text-slate-800">
                         {{ filteredProducts.length }} 項符合的商品
                     </h3>
                     <div class="flex items-center gap-2">
-                        <!-- 提示排序規則 -->
                         <span class="text-[10px] text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
                             <i class="fa-solid fa-arrow-down-short-wide"></i> 地區>地點>類別
                         </span>
@@ -388,21 +376,19 @@
                 </div>
 
                 <div v-for="product in filteredProducts" :key="product.id" class="card p-4 flex flex-col gap-3 group relative overflow-hidden">
-                    <!-- 地區標籤 (如果是快篩模式，需顯示地區) -->
                     <div v-if="!navState.region" class="absolute top-0 right-0 bg-orange-100 text-orange-600 text-[10px] font-bold px-3 py-1 rounded-bl-xl z-10">
                         {{ product.region }}
                     </div>
 
-                    <!-- 商品頭部 -->
                     <div class="flex gap-3 relative">
-                        <div class="w-20 h-20 rounded-xl bg-gray-100 shrink-0 overflow-hidden cursor-pointer" @click="viewImage(product.frontImage)">
+                        <!-- 修改後的圖片點擊事件，傳遞完整的 product 物件以便後續擴充 (若需要) 或直接傳圖片 -->
+                        <div class="w-20 h-20 rounded-xl bg-gray-100 shrink-0 overflow-hidden cursor-pointer" @click="openImageViewer(product.frontImage)">
                             <img :src="product.frontImage" class="w-full h-full object-cover">
                         </div>
                         <div class="flex-1 min-w-0 pr-8">
                             <div class="flex flex-col">
                                 <h3 class="font-bold text-slate-800 text-lg leading-tight truncate mb-1">{{ product.name }}</h3>
                                 
-                                <!-- 飲食標籤顯示 -->
                                 <div class="mb-1 flex flex-wrap gap-1">
                                     <span v-if="hasDietTag(product, 'no-gluten')" class="inline-flex items-center gap-1 text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold">
                                         <i class="fa-solid fa-wheat-awn-circle-exclamation"></i> 無麩
@@ -433,7 +419,6 @@
                             </div>
                         </div>
 
-                        <!-- 編輯/刪除按鈕 -->
                         <div class="absolute right-0 top-6 flex flex-col gap-2">
                            <button @click="editProduct(product)" class="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-100 transition shadow-sm">
                                <i class="fa-solid fa-pen text-xs"></i>
@@ -444,8 +429,7 @@
                         </div>
                     </div>
 
-                    <!-- 成分表 -->
-                    <div class="bg-orange-50/50 rounded-xl p-3 border border-orange-100 cursor-pointer hover:bg-orange-50 transition" @click="viewImage(product.ingredientImage)">
+                    <div class="bg-orange-50/50 rounded-xl p-3 border border-orange-100 cursor-pointer hover:bg-orange-50 transition" @click="openImageViewer(product.ingredientImage)">
                         <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
                             <i class="fa-solid fa-list-check text-orange-400"></i>
                             <span>成分表 (點擊放大檢查)</span>
@@ -484,8 +468,6 @@
             </h2>
 
             <div class="space-y-5">
-                
-                <!-- 1. 照片上傳 -->
                 <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-2">
                         <label class="text-xs font-bold text-gray-500">正面包裝照 <span class="text-red-400">*</span></label>
@@ -511,53 +493,38 @@
                     </div>
                 </div>
 
-                <!-- 飲食標籤 (複選模式) -->
                 <div>
                     <label class="text-xs font-bold text-gray-500 mb-2 block">飲食標籤 (可複選) <span class="text-red-400">*</span></label>
                     <div class="grid grid-cols-3 gap-2">
-                        
-                        <div @click="toggleFormDietary('no-gluten')" 
-                             :class="['diet-option', form.dietary.includes('no-gluten') ? 'selected' : 'bg-gray-50']">
+                        <div @click="toggleFormDietary('no-gluten')" :class="['diet-option', form.dietary.includes('no-gluten') ? 'selected' : 'bg-gray-50']">
                             <div class="text-xl mb-1"><i class="fa-solid fa-wheat-awn-circle-exclamation"></i></div>
                             <div class="text-xs">無麩</div>
                         </div>
-                        
-                        <div @click="toggleFormDietary('no-dairy')" 
-                             :class="['diet-option', form.dietary.includes('no-dairy') ? 'selected' : 'bg-gray-50']">
+                        <div @click="toggleFormDietary('no-dairy')" :class="['diet-option', form.dietary.includes('no-dairy') ? 'selected' : 'bg-gray-50']">
                             <div class="text-xl mb-1"><i class="fa-solid fa-cow"></i></div>
                             <div class="text-xs">無奶</div>
                         </div>
-                        
-                        <div @click="toggleFormDietary('no-egg')" 
-                             :class="['diet-option', form.dietary.includes('no-egg') ? 'selected' : 'bg-gray-50']">
+                        <div @click="toggleFormDietary('no-egg')" :class="['diet-option', form.dietary.includes('no-egg') ? 'selected' : 'bg-gray-50']">
                             <div class="text-xl mb-1"><i class="fa-solid fa-egg"></i></div>
                             <div class="text-xs">無蛋</div>
                         </div>
-
-                        <!-- 無黃豆選項 -->
-                        <div @click="toggleFormDietary('no-soy')" 
-                             :class="['diet-option', form.dietary.includes('no-soy') ? 'selected' : 'bg-gray-50']">
+                        <div @click="toggleFormDietary('no-soy')" :class="['diet-option', form.dietary.includes('no-soy') ? 'selected' : 'bg-gray-50']">
                             <div class="text-xl mb-1"><i class="fa-solid fa-seedling"></i></div>
                             <div class="text-xs">無黃豆</div>
                         </div>
-
-                        <div @click="toggleFormDietary('no-additive')" 
-                             :class="['diet-option', form.dietary.includes('no-additive') ? 'selected' : 'bg-gray-50']">
+                        <div @click="toggleFormDietary('no-additive')" :class="['diet-option', form.dietary.includes('no-additive') ? 'selected' : 'bg-gray-50']">
                             <div class="text-xl mb-1"><i class="fa-solid fa-leaf"></i></div>
                             <div class="text-xs">0添加</div>
                         </div>
-
                     </div>
                     <p class="text-[10px] text-gray-400 mt-1">* 0添加：指無任何食品添加物</p>
                 </div>
 
-                <!-- 2. 基本資訊 -->
                 <div>
                     <label class="text-xs font-bold text-gray-500 mb-1">商品名稱 <span class="text-red-400">*</span></label>
                     <input type="text" v-model="form.name" class="input-std" placeholder="例如：米製義大利麵">
                 </div>
 
-                <!-- 商品分類選擇 -->
                 <div>
                     <label class="text-xs font-bold text-gray-500 mb-1">商品分類</label>
                     <select v-model="form.category" class="input-std bg-white">
@@ -585,7 +552,6 @@
                     </div>
                 </div>
 
-                <!-- 3. 購買資訊 -->
                 <div class="relative">
                     <label class="text-xs font-bold text-gray-500 mb-1">購買地點/店鋪名稱 <span class="text-red-400">*</span></label>
                     <input type="text" v-model="form.location" class="input-std" placeholder="例如：7-11, 全聯, Donki..." @focus="showLocSuggestions=true" @blur="hideSuggestions">
@@ -612,7 +578,7 @@
         </div>
     </div>
 
-    <!-- 設定 Firebase (隱藏式) -->
+    <!-- 設定 Firebase -->
     <div v-if="showConfig" class="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/80">
         <div class="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl">
             <h3 class="font-bold text-lg mb-4 text-slate-800">連線設定 (進階)</h3>
@@ -626,10 +592,42 @@
         </div>
     </div>
 
-    <!-- 圖片放大 -->
-    <div v-if="viewingImg" class="fixed inset-0 z-[70] bg-black/90 flex flex-col justify-center items-center p-4" @click="viewingImg=null">
-        <img :src="viewingImg" class="max-w-full max-h-[80vh] rounded-lg shadow-2xl">
-        <p class="text-white/50 text-sm mt-4">點擊任意處關閉</p>
+    <!-- 升級版圖片檢視器 (支援縮放) -->
+    <div v-if="viewingImg" 
+         class="fixed inset-0 z-[70] bg-black flex justify-center items-center overflow-hidden touch-none"
+         @click.self="closeViewer">
+        
+        <!-- Toolbar -->
+        <div class="absolute top-4 right-4 z-[80] flex gap-2">
+            <button @click="zoomIn" class="w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center backdrop-blur-sm hover:bg-white/30 transition">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+            <button @click="zoomOut" class="w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center backdrop-blur-sm hover:bg-white/30 transition">
+                <i class="fa-solid fa-minus"></i>
+            </button>
+            <button @click="closeViewer" class="w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center backdrop-blur-sm hover:bg-red-500/50 transition ml-2">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Image Container -->
+        <div 
+            ref="imgContainer"
+            class="relative transition-transform duration-75 ease-out cursor-grab active:cursor-grabbing"
+            :style="{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})` }"
+            @mousedown="startPan"
+            @touchstart="handleTouchStart"
+            @touchmove="handleTouchMove"
+            @touchend="handleTouchEnd"
+            @wheel.prevent="handleWheel"
+        >
+            <img :src="viewingImg" 
+                 class="max-w-[100vw] max-h-[90vh] rounded-lg shadow-2xl pointer-events-none select-none object-contain"> 
+        </div>
+        
+        <p class="absolute bottom-6 text-white/50 text-xs pointer-events-none bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
+            {{ scale > 1 ? '拖曳移動 • 雙指/滾輪縮放' : '點擊背景關閉 • 滾輪縮放' }}
+        </p>
     </div>
 
 </div>
@@ -672,21 +670,28 @@
             const statusMsg = ref('');
             const firebaseConfigInput = ref('');
             
+            // Image Zoom State
+            const scale = ref(1);
+            const pan = reactive({ x: 0, y: 0 });
+            let isDragging = false;
+            let startX = 0, startY = 0;
+            let lastPanX = 0, lastPanY = 0;
+            let initialPinchDist = 0;
+            let initialScale = 1;
+
             // Data
             const products = ref([]);
             const searchQuery = ref('');
             const user = ref(null);
             
-            // Navigation State
             const navState = reactive({
                 region: null,      
                 storeType: null,   
                 selectedDiets: [],
-                filterRegion: '', // 搜尋時的地區篩選
-                filterCategory: '' // 搜尋時的類別篩選
+                filterRegion: '', 
+                filterCategory: '' 
             });
 
-            // Constants
             const regions = ['台灣', '日本', '韓國', '歐美', '其他'];
             const categories = ['零食', '主食', '醬料', '飲品', '其他'];
             const storeTypes = [
@@ -698,7 +703,6 @@
                 { value: 'other', label: '其他/網購', icon: 'fa-solid fa-box-open', desc: '地區小店, 網路' }
             ];
 
-            // Form
             const editingId = ref(null);
             const form = reactive({
                 name: '', 
@@ -709,11 +713,10 @@
                 price: null,
                 frontImage: null, 
                 ingredientImage: null,
-                dietary: ['no-gluten'] // default array
+                dietary: ['no-gluten']
             });
             const showLocSuggestions = ref(false);
 
-            // Firebase refs
             let db = null;
             let app = null;
 
@@ -722,6 +725,10 @@
                 const configToUse = customCfg ? JSON.parse(customCfg) : DEFAULT_CONFIG;
                 firebaseConfigInput.value = customCfg || JSON.stringify(DEFAULT_CONFIG, null, 2);
                 initFirebase(configToUse);
+                
+                // Global mouseup to stop dragging even if mouse leaves image
+                window.addEventListener('mouseup', stopPan);
+                window.addEventListener('mousemove', onDrag);
             });
 
             const initFirebase = async (config) => {
@@ -828,27 +835,19 @@
                 return product.dietaryArray && product.dietaryArray.includes(tag);
             };
 
-            // Logic to determine if product list should be shown
             const showProductList = computed(() => {
-                // Case 1: Region Drilldown
                 if (navState.region && navState.storeType) return true;
-                // Case 2: Diet Filters Active on Home (and no region selected)
                 if (!navState.region && navState.selectedDiets.length > 0) return true;
-                
                 return false;
             });
 
             const filteredProducts = computed(() => {
                 let list = [];
-
-                // Step 1: Base Filter (Scenario A vs B)
                 if (!navState.region && navState.selectedDiets.length > 0) {
-                    // Scenario A: Diet Filter Mode
                     list = products.value.filter(p => {
                         return navState.selectedDiets.every(tag => p.dietaryArray.includes(tag));
                     });
                 } else if (navState.region && navState.storeType) {
-                    // Scenario B: Region Mode
                     list = products.value.filter(p => {
                         return p.region === navState.region && p.storeType === navState.storeType;
                     });
@@ -856,7 +855,6 @@
                     return [];
                 }
 
-                // Step 2: Apply Search & Advanced Filters (Region/Category dropdowns)
                 list = list.filter(p => {
                     const matchSearch = !searchQuery.value || (p.name + p.location + p.region).toLowerCase().includes(searchQuery.value.toLowerCase());
                     const matchFilterRegion = !navState.filterRegion || p.region === navState.filterRegion;
@@ -864,24 +862,115 @@
                     return matchSearch && matchFilterRegion && matchFilterCategory;
                 });
 
-                // Step 3: Automatic Sorting (Region > Location > Category > Timestamp)
                 return list.sort((a, b) => {
-                    // 1. Region
                     if ((a.region || '') < (b.region || '')) return -1;
                     if ((a.region || '') > (b.region || '')) return 1;
-                    
-                    // 2. Location (Alphabetical)
                     if ((a.location || '') < (b.location || '')) return -1;
                     if ((a.location || '') > (b.location || '')) return 1;
-
-                    // 3. Category
                     if ((a.category || '') < (b.category || '')) return -1;
                     if ((a.category || '') > (b.category || '')) return 1;
-
-                    // 4. Timestamp (Newest first)
                     return (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0);
                 });
             });
+
+            // --- Image Viewer Logic (Zoom & Pan) ---
+            const openImageViewer = (src) => {
+                viewingImg.value = src;
+                resetZoom();
+            };
+
+            const closeViewer = () => {
+                viewingImg.value = null;
+            };
+
+            const resetZoom = () => {
+                scale.value = 1;
+                pan.x = 0; 
+                pan.y = 0;
+            };
+
+            const zoomIn = () => {
+                scale.value = Math.min(scale.value + 0.5, 5);
+            };
+
+            const zoomOut = () => {
+                scale.value = Math.max(scale.value - 0.5, 1);
+                if(scale.value === 1) { pan.x = 0; pan.y = 0; }
+            };
+
+            const handleWheel = (e) => {
+                const delta = e.deltaY > 0 ? -0.2 : 0.2;
+                const newScale = Math.min(Math.max(scale.value + delta, 1), 5);
+                scale.value = newScale;
+                if(scale.value === 1) { pan.x = 0; pan.y = 0; }
+            };
+
+            // Drag/Pan Logic (Mouse)
+            const startPan = (e) => {
+                if(scale.value <= 1) return; // Only pan when zoomed
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                lastPanX = pan.x;
+                lastPanY = pan.y;
+            };
+
+            const onDrag = (e) => {
+                if (!isDragging) return;
+                e.preventDefault();
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                pan.x = lastPanX + deltaX;
+                pan.y = lastPanY + deltaY;
+            };
+
+            const stopPan = () => {
+                isDragging = false;
+            };
+
+            // Touch Logic (Pinch & Pan)
+            const getDistance = (touches) => {
+                return Math.hypot(
+                    touches[0].clientX - touches[1].clientX,
+                    touches[0].clientY - touches[1].clientY
+                );
+            };
+
+            const handleTouchStart = (e) => {
+                if (e.touches.length === 2) {
+                    isDragging = false;
+                    initialPinchDist = getDistance(e.touches);
+                    initialScale = scale.value;
+                } else if (e.touches.length === 1 && scale.value > 1) {
+                    isDragging = true;
+                    startX = e.touches[0].clientX;
+                    startY = e.touches[0].clientY;
+                    lastPanX = pan.x;
+                    lastPanY = pan.y;
+                }
+            };
+
+            const handleTouchMove = (e) => {
+                if (e.touches.length === 2) {
+                    // Pinch Zoom
+                    const dist = getDistance(e.touches);
+                    const zoomFactor = dist / initialPinchDist;
+                    scale.value = Math.min(Math.max(initialScale * zoomFactor, 1), 5);
+                    if(scale.value === 1) { pan.x = 0; pan.y = 0; }
+                } else if (e.touches.length === 1 && isDragging) {
+                    // Pan
+                    const deltaX = e.touches[0].clientX - startX;
+                    const deltaY = e.touches[0].clientY - startY;
+                    pan.x = lastPanX + deltaX;
+                    pan.y = lastPanY + deltaY;
+                }
+            };
+
+            const handleTouchEnd = () => {
+                isDragging = false;
+            };
+
+            // --- End Image Viewer Logic ---
 
             // Form & Actions
             const openUploadModal = () => {
@@ -983,9 +1072,10 @@
                 showUpload, showConfig, viewingImg, loading, isSubmitting, statusMsg, firebaseConfigInput,
                 navState, regions, storeTypes, categories,
                 filteredProducts, showProductList, suggestedLocations, showLocSuggestions, hideSuggestions, searchQuery,
-                form, editingId,
+                form, editingId, scale, pan, // Export zoom state
                 resetView, toggleDietFilter, toggleFormDietary, getRegionCount, getStoreTypeCount, getStoreTypeLabel, getDietLabel, hasDietTag,
-                saveConfig, resetToDefault, handleImage, submitProduct, openUploadModal, editProduct, confirmDelete, closeUpload, viewImage
+                saveConfig, resetToDefault, handleImage, submitProduct, openUploadModal, editProduct, confirmDelete, closeUpload, 
+                viewImage, openImageViewer, closeViewer, zoomIn, zoomOut, handleWheel, startPan, handleTouchStart, handleTouchMove, handleTouchEnd // Viewer functions
             };
         }
     }).mount('#app');
