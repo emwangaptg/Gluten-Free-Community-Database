@@ -76,6 +76,22 @@
             padding: 2px 8px; border-radius: 10px;
         }
 
+        /* 飲食快篩卡片 */
+        .diet-card {
+            border-radius: 16px;
+            padding: 12px 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            border: 1px solid transparent;
+            height: 80px; /* 固定高度讓排版整齊 */
+        }
+        .diet-card:active { transform: scale(0.95); }
+        
         .img-box {
             width: 100%;
             height: 160px;
@@ -120,6 +136,11 @@
             text-align: center;
             cursor: pointer;
             transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 70px;
         }
         .diet-option.active {
             border-color: #fb923c;
@@ -152,7 +173,6 @@
     <!-- 頂部導航 -->
     <header class="px-6 pt-6 pb-4 bg-white sticky top-0 z-20 shadow-sm rounded-b-[30px]">
         <div class="flex justify-between items-center mb-2">
-            <!-- 修改：加上 hover:opacity-80 transition-opacity 讓點擊感更明確 -->
             <h1 class="text-2xl font-bold text-orange-600 flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" @click="resetView">
                 <i class="fa-solid fa-wheat-awn-circle-exclamation"></i>
                 GF Radar
@@ -169,21 +189,38 @@
         <div class="breadcrumb px-1 scrollbar-hide">
             <div class="breadcrumb-item" @click="resetView"><i class="fa-solid fa-house"></i> 首頁</div>
             
-            <span v-if="navState.region" class="breadcrumb-arrow"><i class="fa-solid fa-chevron-right"></i></span>
-            <div v-if="navState.region" class="breadcrumb-item" @click="navState.storeType = null" :class="{'breadcrumb-current': !navState.storeType}">
-                {{ navState.region }}
-            </div>
+            <!-- 路徑 A: 地區導航 -->
+            <template v-if="navState.region">
+                <span class="breadcrumb-arrow"><i class="fa-solid fa-chevron-right"></i></span>
+                <div class="breadcrumb-item" @click="navState.storeType = null" :class="{'breadcrumb-current': !navState.storeType}">
+                    {{ navState.region }}
+                </div>
+                <template v-if="navState.storeType">
+                    <span class="breadcrumb-arrow"><i class="fa-solid fa-chevron-right"></i></span>
+                    <div class="breadcrumb-item breadcrumb-current">
+                        {{ getStoreTypeLabel(navState.storeType) }}
+                    </div>
+                </template>
+            </template>
 
-            <span v-if="navState.storeType" class="breadcrumb-arrow"><i class="fa-solid fa-chevron-right"></i></span>
-            <div v-if="navState.storeType" class="breadcrumb-item breadcrumb-current">
-                {{ getStoreTypeLabel(navState.storeType) }}
-            </div>
+            <!-- 路徑 B: 飲食快篩導航 -->
+            <template v-if="navState.dietMode">
+                <span class="breadcrumb-arrow"><i class="fa-solid fa-chevron-right"></i></span>
+                <div class="breadcrumb-item breadcrumb-current">
+                    <span v-if="navState.dietMode === 'no-gluten'">無麩質</span>
+                    <span v-else-if="navState.dietMode === 'no-dairy'">無奶</span>
+                    <span v-else-if="navState.dietMode === 'no-egg'">無蛋</span>
+                    <span v-else-if="navState.dietMode === 'double-free'">無奶麩</span>
+                    <span v-else-if="navState.dietMode === 'egg-gluten-free'">無蛋麩</span>
+                    <span v-else>無蛋奶麩</span>
+                </div>
+            </template>
         </div>
 
-        <!-- 搜尋 (只在商品列表頁顯示，或作為全域搜尋) -->
-        <div v-if="navState.storeType" class="relative">
+        <!-- 搜尋 (只在商品列表頁顯示) -->
+        <div v-if="navState.storeType || navState.dietMode" class="relative">
             <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i>
-            <input type="text" v-model="searchQuery" placeholder="搜尋此分類下的商品..." class="input-std pl-10 py-2.5 text-sm">
+            <input type="text" v-model="searchQuery" placeholder="搜尋列表中的商品..." class="input-std pl-10 py-2.5 text-sm">
         </div>
     </header>
 
@@ -195,14 +232,66 @@
             <p class="text-sm">正在同步社群資料...</p>
         </div>
 
-        <!-- Level 1: 地區資料夾 (Root) -->
-        <div v-else-if="!navState.region" class="grid grid-cols-2 gap-4 animate-slide-up">
-            <div v-for="region in regions" :key="region" @click="navState.region = region" class="folder-card">
-                <span class="folder-count">{{ getRegionCount(region) }}</span>
-                <i class="fa-solid fa-map-location-dot folder-icon"></i>
-                <h3 class="font-bold text-lg text-slate-800">{{ region }}</h3>
-                <p class="text-xs text-gray-500 mt-1">點擊進入</p>
-            </div>
+        <!-- Level 1: 首頁 (資料夾 + 飲食快篩) -->
+        <div v-else-if="!navState.region && !navState.dietMode" class="space-y-6 animate-slide-up">
+            
+            <!-- 新增：飲食習慣快篩 (改為 3x2 格) -->
+            <section>
+                <h3 class="font-bold text-slate-700 mb-3 px-1 flex items-center gap-2">
+                    <i class="fa-solid fa-utensils text-orange-400"></i> 飲食習慣快篩
+                </h3>
+                <div class="grid grid-cols-3 gap-3">
+                    <!-- 第一排：基礎單項 -->
+                    <div @click="setDietMode('no-gluten')" class="diet-card bg-amber-50 border-amber-100 text-amber-700">
+                        <i class="fa-solid fa-wheat-awn-circle-exclamation text-xl mb-1"></i>
+                        <span class="text-xs font-bold">無麩質</span>
+                    </div>
+                    <div @click="setDietMode('no-dairy')" class="diet-card bg-blue-50 border-blue-100 text-blue-700">
+                        <i class="fa-solid fa-cow text-xl mb-1"></i>
+                        <span class="text-xs font-bold">無奶</span>
+                    </div>
+                    <div @click="setDietMode('no-egg')" class="diet-card bg-yellow-50 border-yellow-100 text-yellow-700">
+                        <i class="fa-solid fa-egg text-xl mb-1"></i>
+                        <span class="text-xs font-bold">無蛋</span>
+                    </div>
+
+                    <!-- 第二排：複合項目 -->
+                    <div @click="setDietMode('double-free')" class="diet-card bg-purple-50 border-purple-100 text-purple-700">
+                        <div class="flex gap-1 mb-1">
+                            <i class="fa-solid fa-cow"></i>
+                            <i class="fa-solid fa-wheat-awn"></i>
+                        </div>
+                        <span class="text-xs font-bold">無奶麩</span>
+                    </div>
+                    <div @click="setDietMode('egg-gluten-free')" class="diet-card bg-lime-50 border-lime-100 text-lime-700">
+                        <div class="flex gap-1 mb-1">
+                            <i class="fa-solid fa-egg"></i>
+                            <i class="fa-solid fa-wheat-awn"></i>
+                        </div>
+                        <span class="text-xs font-bold">無蛋麩</span>
+                    </div>
+                    <div @click="setDietMode('triple-free')" class="diet-card bg-rose-50 border-rose-100 text-rose-700">
+                        <i class="fa-solid fa-shield-heart text-xl mb-1"></i>
+                        <span class="text-xs font-bold">無蛋奶麩</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 地區瀏覽 -->
+            <section>
+                <h3 class="font-bold text-slate-700 mb-3 px-1 flex items-center gap-2">
+                    <i class="fa-solid fa-earth-asia text-orange-400"></i> 依地區瀏覽
+                </h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div v-for="region in regions" :key="region" @click="navState.region = region" class="folder-card">
+                        <span class="folder-count">{{ getRegionCount(region) }}</span>
+                        <i class="fa-solid fa-map-location-dot folder-icon"></i>
+                        <h3 class="font-bold text-lg text-slate-800">{{ region }}</h3>
+                        <p class="text-xs text-gray-500 mt-1">點擊進入</p>
+                    </div>
+                </div>
+            </section>
+
         </div>
 
         <!-- Level 2: 商店類型資料夾 (Selected Region) -->
@@ -215,16 +304,22 @@
             </div>
         </div>
 
-        <!-- Level 3: 商品列表 (Selected Region & StoreType) -->
+        <!-- Level 3: 商品列表 (Region+StoreType OR DietMode) -->
         <div v-else class="space-y-4 animate-slide-up">
             
             <div v-if="filteredProducts.length === 0" class="text-center py-20 text-gray-400">
                 <i class="fa-solid fa-cookie-bite text-4xl mb-3 text-orange-200"></i>
                 <p>這裡還沒有商品</p>
-                <p class="text-xs mt-1">按右下角 + 分享第一個吧！</p>
+                <p v-if="navState.dietMode" class="text-xs mt-1">目前沒有符合此飲食條件的分享</p>
+                <p v-else class="text-xs mt-1">按右下角 + 分享第一個吧！</p>
             </div>
 
             <div v-for="product in filteredProducts" :key="product.id" class="card p-4 flex flex-col gap-3 group relative overflow-hidden">
+                <!-- 地區標籤 (如果是飲食模式顯示，就顯示地區標籤) -->
+                <div v-if="navState.dietMode" class="absolute top-0 right-0 bg-orange-100 text-orange-600 text-[10px] font-bold px-3 py-1 rounded-bl-xl z-10">
+                    {{ product.region }}
+                </div>
+
                 <!-- 商品頭部 -->
                 <div class="flex gap-3 relative">
                     <div class="w-20 h-20 rounded-xl bg-gray-100 shrink-0 overflow-hidden cursor-pointer" @click="viewImage(product.frontImage)">
@@ -234,8 +329,9 @@
                         <div class="flex flex-col">
                             <h3 class="font-bold text-slate-800 text-lg leading-tight truncate mb-1">{{ product.name }}</h3>
                             
-                            <!-- 飲食標籤 -->
-                            <div class="mb-1">
+                            <!-- 飲食標籤顯示 -->
+                            <div class="mb-1 flex flex-wrap gap-1">
+                                <!-- 既有標籤 -->
                                 <span v-if="product.dietary === 'no-dairy'" class="inline-flex items-center gap-1 text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold">
                                     <i class="fa-solid fa-cow"></i> 無奶
                                 </span>
@@ -245,12 +341,24 @@
                                 <span v-else-if="product.dietary === 'double-free'" class="inline-flex items-center gap-1 text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-bold">
                                     <i class="fa-solid fa-check-double"></i> 無奶麩
                                 </span>
+                                
+                                <!-- 新增標籤 -->
+                                <span v-else-if="product.dietary === 'no-egg'" class="inline-flex items-center gap-1 text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold">
+                                    <i class="fa-solid fa-egg"></i> 無蛋
+                                </span>
+                                <span v-else-if="product.dietary === 'egg-gluten-free'" class="inline-flex items-center gap-1 text-[10px] bg-lime-100 text-lime-700 px-2 py-0.5 rounded-full font-bold">
+                                    <i class="fa-solid fa-wheat-awn"></i><i class="fa-solid fa-egg"></i> 無蛋麩
+                                </span>
+                                <span v-else-if="product.dietary === 'triple-free'" class="inline-flex items-center gap-1 text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold">
+                                    <i class="fa-solid fa-shield-heart"></i> 無蛋奶麩
+                                </span>
                             </div>
 
                             <div class="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
                                 <span class="bg-gray-100 px-2 py-0.5 rounded-md text-orange-500 font-bold truncate max-w-[140px]">
                                     <i class="fa-solid fa-location-dot mr-1"></i>{{ product.location }}
                                 </span>
+                                <span class="bg-gray-100 px-2 py-0.5 rounded-md">{{ product.category }}</span>
                             </div>
                             <div class="mt-2 font-bold text-orange-600">
                                 約 NT$ {{ product.price }}
@@ -334,10 +442,11 @@
                     </div>
                 </div>
 
-                <!-- 飲食標籤 -->
+                <!-- 飲食標籤 (更新為 6 選項) -->
                 <div>
                     <label class="text-xs font-bold text-gray-500 mb-2 block">飲食標籤 <span class="text-red-400">*</span></label>
                     <div class="grid grid-cols-3 gap-2">
+                        <!-- 既有 -->
                         <div @click="form.dietary = 'no-gluten'" :class="['diet-option', form.dietary === 'no-gluten' ? 'active' : 'bg-gray-50']">
                             <div class="text-xl mb-1"><i class="fa-solid fa-wheat-awn-circle-exclamation"></i></div>
                             <div class="text-xs font-bold">無麩</div>
@@ -346,9 +455,26 @@
                             <div class="text-xl mb-1"><i class="fa-solid fa-cow"></i></div>
                             <div class="text-xs font-bold">無奶</div>
                         </div>
+                        <!-- 新增: 無蛋 -->
+                        <div @click="form.dietary = 'no-egg'" :class="['diet-option', form.dietary === 'no-egg' ? 'active' : 'bg-gray-50']">
+                            <div class="text-xl mb-1"><i class="fa-solid fa-egg"></i></div>
+                            <div class="text-xs font-bold">無蛋</div>
+                        </div>
+                        
+                        <!-- 複合 -->
                         <div @click="form.dietary = 'double-free'" :class="['diet-option', form.dietary === 'double-free' ? 'active' : 'bg-gray-50']">
-                            <div class="text-xl mb-1"><i class="fa-solid fa-check-double"></i></div>
+                            <div class="text-sm mb-1"><i class="fa-solid fa-cow"></i><i class="fa-solid fa-wheat-awn"></i></div>
                             <div class="text-xs font-bold">無奶麩</div>
+                        </div>
+                        <!-- 新增: 無蛋麩 -->
+                        <div @click="form.dietary = 'egg-gluten-free'" :class="['diet-option', form.dietary === 'egg-gluten-free' ? 'active' : 'bg-gray-50']">
+                            <div class="text-sm mb-1"><i class="fa-solid fa-egg"></i><i class="fa-solid fa-wheat-awn"></i></div>
+                            <div class="text-xs font-bold">無蛋麩</div>
+                        </div>
+                        <!-- 新增: 無蛋奶麩 -->
+                        <div @click="form.dietary = 'triple-free'" :class="['diet-option', form.dietary === 'triple-free' ? 'active' : 'bg-gray-50']">
+                            <div class="text-xl mb-1"><i class="fa-solid fa-shield-heart"></i></div>
+                            <div class="text-xs font-bold">無蛋奶麩</div>
                         </div>
                     </div>
                 </div>
@@ -357,6 +483,18 @@
                 <div>
                     <label class="text-xs font-bold text-gray-500 mb-1">商品名稱 <span class="text-red-400">*</span></label>
                     <input type="text" v-model="form.name" class="input-std" placeholder="例如：米製義大利麵">
+                </div>
+
+                <!-- 商品分類選擇 -->
+                <div>
+                    <label class="text-xs font-bold text-gray-500 mb-1">商品分類</label>
+                    <select v-model="form.category" class="input-std bg-white">
+                        <option value="零食">🍪 零食/點心</option>
+                        <option value="主食">🍜 麵/飯/麵包</option>
+                        <option value="醬料">🥣 醬料/調味</option>
+                        <option value="飲品">🥤 飲料/酒</option>
+                        <option value="其他">📦 其他</option>
+                    </select>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
@@ -371,7 +509,6 @@
                         </select>
                     </div>
                     <div>
-                        <!-- 新增：商店類型 -->
                         <label class="text-xs font-bold text-gray-500 mb-1">商店類型</label>
                         <select v-model="form.storeType" class="input-std bg-white">
                             <option value="convenience">🏪 便利商店</option>
@@ -478,8 +615,9 @@
             
             // Navigation State
             const navState = reactive({
-                region: null,      // Level 1: Taiwan, Japan...
-                storeType: null    // Level 2: convenience, supermarket...
+                region: null,      
+                storeType: null,   
+                dietMode: null     
             });
 
             // Constants
@@ -498,7 +636,7 @@
             const form = reactive({
                 name: '', 
                 region: '台灣', 
-                storeType: 'convenience', // New Field
+                storeType: 'convenience',
                 category: '零食', 
                 location: '', 
                 price: null,
@@ -543,13 +681,11 @@
                 const q = query(collection(db, 'artifacts', appIdStr, 'public', 'data', 'gf_products'), orderBy("timestamp", "desc"));
                 
                 onSnapshot(q, (snapshot) => {
-                    // Process products and try to infer storeType for old data
                     products.value = snapshot.docs.map(doc => {
                         const data = doc.data();
                         return { 
                             id: doc.id, 
                             ...data,
-                            // Backwards compatibility: Infer storeType if missing
                             storeType: data.storeType || inferStoreType(data.location)
                         };
                     });
@@ -557,7 +693,6 @@
                 });
             };
 
-            // Helper to guess store type from location string
             const inferStoreType = (loc) => {
                 if (!loc) return 'other';
                 const l = loc.toLowerCase();
@@ -573,6 +708,14 @@
             const resetView = () => {
                 navState.region = null;
                 navState.storeType = null;
+                navState.dietMode = null; 
+                searchQuery.value = '';
+            };
+
+            const setDietMode = (mode) => {
+                navState.region = null; 
+                navState.storeType = null;
+                navState.dietMode = mode;
                 searchQuery.value = '';
             };
 
@@ -582,7 +725,42 @@
 
             // Filter Logic
             const filteredProducts = computed(() => {
-                // Must have Region and StoreType selected to see products
+                // 情境 A: 飲食快篩模式
+                if (navState.dietMode) {
+                    return products.value.filter(p => {
+                        const d = p.dietary;
+                        // 判斷邏輯:
+                        // No Gluten (無麩): no-gluten, double-free, egg-gluten-free, triple-free
+                        // No Dairy (無奶): no-dairy, double-free, triple-free
+                        // No Egg (無蛋): no-egg, egg-gluten-free, triple-free
+                        
+                        const isNoGluten = ['no-gluten', 'double-free', 'egg-gluten-free', 'triple-free'].includes(d);
+                        const isNoDairy = ['no-dairy', 'double-free', 'triple-free'].includes(d); 
+                        const isNoEgg = ['no-egg', 'egg-gluten-free', 'triple-free'].includes(d);
+
+                        // 複合選項邏輯 (嚴格匹配該類型或更嚴格的類型)
+                        // 無奶麩 (G+D Free): double-free, triple-free
+                        const isDoubleFree = ['double-free', 'triple-free'].includes(d);
+                        // 無蛋麩 (G+E Free): egg-gluten-free, triple-free
+                        const isEggGlutenFree = ['egg-gluten-free', 'triple-free'].includes(d);
+                        // 無蛋奶麩 (G+D+E Free): triple-free
+                        const isTripleFree = d === 'triple-free';
+
+                        let matchDiet = false;
+                        if (navState.dietMode === 'no-gluten') matchDiet = isNoGluten;
+                        else if (navState.dietMode === 'no-dairy') matchDiet = isNoDairy;
+                        else if (navState.dietMode === 'no-egg') matchDiet = isNoEgg;
+                        else if (navState.dietMode === 'double-free') matchDiet = isDoubleFree;
+                        else if (navState.dietMode === 'egg-gluten-free') matchDiet = isEggGlutenFree;
+                        else if (navState.dietMode === 'triple-free') matchDiet = isTripleFree;
+
+                        const matchSearch = !searchQuery.value || (p.name + p.location + p.region).toLowerCase().includes(searchQuery.value.toLowerCase());
+                        
+                        return matchDiet && matchSearch;
+                    });
+                }
+
+                // 情境 B: 地區導航模式
                 if (!navState.region || !navState.storeType) return [];
                 
                 return products.value.filter(p => {
@@ -596,7 +774,6 @@
             // Form & Actions
             const openUploadModal = () => {
                 editingId.value = null;
-                // Pre-fill region/type if user is currently browsing one
                 const defaultRegion = navState.region || '台灣';
                 const defaultType = navState.storeType || 'convenience';
                 
@@ -612,7 +789,7 @@
                 Object.assign(form, {
                     name: product.name,
                     region: product.region,
-                    storeType: product.storeType || inferStoreType(product.location), // Ensure we have a type
+                    storeType: product.storeType || inferStoreType(product.location), 
                     category: product.category,
                     location: product.location,
                     price: product.price,
@@ -643,7 +820,7 @@
                         alert("發布成功");
                     }
                     closeUpload();
-                    // Auto navigate to the new product's folder so user can see it
+                    navState.dietMode = null;
                     navState.region = form.region;
                     navState.storeType = form.storeType;
                 } catch(e) {
@@ -660,7 +837,6 @@
                 } catch(e) { console.error(e); }
             };
 
-            // Utils
             const handleImage = (e, field) => {
                 const file = e.target.files[0];
                 if(!file) return;
@@ -696,10 +872,10 @@
 
             return {
                 showUpload, showConfig, viewingImg, loading, isSubmitting, statusMsg, firebaseConfigInput,
-                navState, regions, storeTypes, // Navigation
+                navState, regions, storeTypes, 
                 filteredProducts, suggestedLocations, showLocSuggestions, hideSuggestions, searchQuery,
                 form, editingId,
-                resetView, getRegionCount, getStoreTypeCount, getStoreTypeLabel,
+                resetView, setDietMode, getRegionCount, getStoreTypeCount, getStoreTypeLabel,
                 saveConfig, resetToDefault, handleImage, submitProduct, openUploadModal, editProduct, confirmDelete, closeUpload, viewImage
             };
         }
