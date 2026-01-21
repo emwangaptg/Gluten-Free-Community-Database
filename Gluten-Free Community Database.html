@@ -76,7 +76,7 @@
             padding: 2px 8px; border-radius: 10px;
         }
 
-        /* 飲食快篩卡片 (複選樣式) */
+        /* 飲食快篩卡片 (複選彩色樣式) */
         .diet-card {
             border-radius: 16px;
             padding: 12px 8px;
@@ -89,22 +89,37 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.05);
             border: 2px solid transparent;
             height: 85px; 
-            opacity: 0.8;
             background-color: white;
         }
         .diet-card:active { transform: scale(0.95); }
+        
+        /* 預設淺色背景 (未選取) - 帶有淡淡的顏色 */
+        /* 改色：無麩質改為玫瑰紅 Rose */
+        .diet-card.opt-gluten { background-color: #fff1f2; color: #9f1239; } /* Rose-50, Rose-800 */
+        .diet-card.opt-dairy { background-color: #eff6ff; color: #1e40af; } /* Blue */
+        .diet-card.opt-egg { background-color: #fefce8; color: #854d0e; } /* Yellow */
+        .diet-card.opt-additive { background-color: #ecfdf5; color: #065f46; } /* Emerald */
+
+        /* 未選取時稍微透明/灰階，讓選取的更突出 */
+        .diet-card:not(.active) { opacity: 0.7; filter: grayscale(0.3); border: 1px solid transparent; }
+        .diet-card:not(.active):hover { opacity: 1; filter: grayscale(0); transform: translateY(-1px); }
+
+        /* 選取狀態 (Active) */
         .diet-card.active {
             opacity: 1;
+            filter: grayscale(0);
             transform: translateY(-2px);
-            box-shadow: 0 6px 15px rgba(251, 146, 60, 0.2);
-            background-color: #fff7ed;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
             border-width: 2px;
+            font-weight: bold;
         }
-        /* 各別顏色定義 */
-        .diet-card.active.opt-gluten { border-color: #f59e0b; color: #b45309; }
-        .diet-card.active.opt-dairy { border-color: #3b82f6; color: #1d4ed8; }
-        .diet-card.active.opt-egg { border-color: #eab308; color: #854d0e; }
-        .diet-card.active.opt-additive { border-color: #10b981; color: #047857; }
+        
+        /* 選取時的強調色 (Active Border & Background) */
+        /* 改色：無麩質 Active 改為 Rose */
+        .diet-card.active.opt-gluten { border-color: #f43f5e; background-color: #ffe4e6; } /* Rose-500, Rose-100 */
+        .diet-card.active.opt-dairy { border-color: #3b82f6; background-color: #dbeafe; }
+        .diet-card.active.opt-egg { border-color: #eab308; background-color: #fef9c3; }
+        .diet-card.active.opt-additive { border-color: #10b981; background-color: #d1fae5; }
 
         .img-box {
             width: 100%;
@@ -350,7 +365,8 @@
                                 
                                 <!-- 飲食標籤顯示 -->
                                 <div class="mb-1 flex flex-wrap gap-1">
-                                    <span v-if="hasDietTag(product, 'no-gluten')" class="inline-flex items-center gap-1 text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">
+                                    <!-- 修改: 無麩質改為 Rose 色系 -->
+                                    <span v-if="hasDietTag(product, 'no-gluten')" class="inline-flex items-center gap-1 text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold">
                                         <i class="fa-solid fa-wheat-awn-circle-exclamation"></i> 無麩
                                     </span>
                                     <span v-if="hasDietTag(product, 'no-dairy')" class="inline-flex items-center gap-1 text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
@@ -633,7 +649,7 @@
             const storeTypes = [
                 { value: 'convenience', label: '便利商店', icon: 'fa-solid fa-store', desc: '7-11, 全家, Lawson' },
                 { value: 'supermarket', label: '超市/大賣場', icon: 'fa-solid fa-cart-shopping', desc: '全聯, 家樂福, Aeon' },
-                { value: 'donki', label: '唐吉訶德/雜貨', icon: 'fa-solid fa-penguin', desc: 'Don Quijote, Kaldi' },
+                { value: 'donki', label: '唐吉訶德/雜貨', icon: 'fa-solid fa-bag-shopping', desc: 'Don Quijote, Kaldi' },
                 { value: 'organic', label: '有機/健康', icon: 'fa-solid fa-leaf', desc: '里仁, 聖德科斯' },
                 { value: 'drugstore', label: '藥妝店', icon: 'fa-solid fa-pills', desc: '松本清, Welcia' },
                 { value: 'other', label: '其他/網購', icon: 'fa-solid fa-box-open', desc: '地區小店, 網路' }
