@@ -381,7 +381,6 @@
                     </div>
 
                     <div class="flex gap-3 relative">
-                        <!-- 修改後的圖片點擊事件，傳遞完整的 product 物件以便後續擴充 (若需要) 或直接傳圖片 -->
                         <div class="w-20 h-20 rounded-xl bg-gray-100 shrink-0 overflow-hidden cursor-pointer" @click="openImageViewer(product.frontImage)">
                             <img :src="product.frontImage" class="w-full h-full object-cover">
                         </div>
@@ -522,7 +521,7 @@
 
                 <div>
                     <label class="text-xs font-bold text-gray-500 mb-1">商品名稱 <span class="text-red-400">*</span></label>
-                    <input type="text" v-model="form.name" class="input-std" placeholder="例如：米製義大利麵">
+                    <input type="text" v-model="form.name" class="input-std" placeholder="例如：米製義大利麵" @blur="checkDuplicateName">
                 </div>
 
                 <div>
@@ -596,8 +595,6 @@
     <div v-if="viewingImg" 
          class="fixed inset-0 z-[70] bg-black flex justify-center items-center overflow-hidden touch-none"
          @click.self="closeViewer">
-        
-        <!-- Toolbar -->
         <div class="absolute top-4 right-4 z-[80] flex gap-2">
             <button @click="zoomIn" class="w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center backdrop-blur-sm hover:bg-white/30 transition">
                 <i class="fa-solid fa-plus"></i>
@@ -609,8 +606,6 @@
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
-
-        <!-- Image Container -->
         <div 
             ref="imgContainer"
             class="relative transition-transform duration-75 ease-out cursor-grab active:cursor-grabbing"
@@ -624,10 +619,41 @@
             <img :src="viewingImg" 
                  class="max-w-[100vw] max-h-[90vh] rounded-lg shadow-2xl pointer-events-none select-none object-contain"> 
         </div>
-        
         <p class="absolute bottom-6 text-white/50 text-xs pointer-events-none bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
             {{ scale > 1 ? '拖曳移動 • 雙指/滾輪縮放' : '點擊背景關閉 • 滾輪縮放' }}
         </p>
+    </div>
+
+    <!-- 重複商品提醒 Modal (移除動畫依賴以確保顯示) -->
+    <div v-if="showDuplicateModal" class="fixed inset-0 z-[80] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+        <div class="bg-white w-full max-w-sm rounded-2xl p-5 shadow-2xl scale-100">
+            <div class="flex items-center gap-2 text-amber-600 font-bold text-lg mb-3">
+                <i class="fa-solid fa-triangle-exclamation"></i> 發現相似的商品
+            </div>
+            <p class="text-sm text-gray-600 mb-4">社群內似乎已經有類似的商品了，請確認是否為重複分享：</p>
+            
+            <div class="bg-amber-50 border border-amber-100 rounded-xl p-2 mb-5 max-h-48 overflow-y-auto space-y-2">
+                <div v-for="dup in duplicateCandidates" :key="dup.id" class="flex gap-2 items-center bg-white p-2 rounded-lg border border-amber-100">
+                    <img :src="dup.frontImage" class="w-10 h-10 rounded object-cover shrink-0 bg-gray-100">
+                    <div class="min-w-0 flex-1">
+                        <div class="text-sm font-bold text-slate-800 truncate">{{ dup.name }}</div>
+                        <div class="text-xs text-gray-500">{{ dup.location }} • {{ dup.region }}</div>
+                    </div>
+                    <div class="text-xs font-mono text-amber-600 font-bold bg-amber-100 px-1.5 py-0.5 rounded">
+                        {{ Math.round(dup.similarity * 100) }}% 相似
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button @click="showDuplicateModal = false" class="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-gray-500 font-bold text-sm hover:bg-gray-50">
+                    返回修改名稱
+                </button>
+                <button @click="confirmDuplicate" class="flex-1 py-2.5 rounded-xl bg-amber-500 text-white font-bold text-sm shadow-md hover:bg-amber-600">
+                    沒關係，繼續新增
+                </button>
+            </div>
+        </div>
     </div>
 
 </div>
@@ -679,6 +705,10 @@
             let initialPinchDist = 0;
             let initialScale = 1;
 
+            // Duplicate Check State
+            const showDuplicateModal = ref(false);
+            const isDuplicateConfirmed = ref(false);
+
             // Data
             const products = ref([]);
             const searchQuery = ref('');
@@ -726,7 +756,6 @@
                 firebaseConfigInput.value = customCfg || JSON.stringify(DEFAULT_CONFIG, null, 2);
                 initFirebase(configToUse);
                 
-                // Global mouseup to stop dragging even if mouse leaves image
                 window.addEventListener('mouseup', stopPan);
                 window.addEventListener('mousemove', onDrag);
             });
@@ -835,9 +864,13 @@
                 return product.dietaryArray && product.dietaryArray.includes(tag);
             };
 
+            // Logic to determine if product list should be shown
             const showProductList = computed(() => {
+                // Case 1: Region Drilldown
                 if (navState.region && navState.storeType) return true;
+                // Case 2: Diet Filters Active on Home (and no region selected)
                 if (!navState.region && navState.selectedDiets.length > 0) return true;
+                
                 return false;
             });
 
@@ -871,6 +904,62 @@
                     if ((a.category || '') > (b.category || '')) return 1;
                     return (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0);
                 });
+            });
+
+            // Similarity Helper
+            const calculateSimilarity = (a, b) => {
+                if(!a || !b) return 0;
+                // Remove spaces and convert to lower case
+                const cleanA = a.replace(/\s+/g, '').toLowerCase();
+                const cleanB = b.replace(/\s+/g, '').toLowerCase();
+                
+                if(cleanA === cleanB) return 1;
+
+                // Create sets of characters
+                const setA = new Set(cleanA);
+                const setB = new Set(cleanB);
+                
+                let matches = 0;
+                setA.forEach(char => {
+                    if(setB.has(char)) matches++;
+                });
+                
+                // Jaccard Index
+                const union = setA.size + setB.size - matches;
+                if(union === 0) return 0;
+                return matches / union;
+            };
+
+            // Duplicate Candidates
+            const duplicateCandidates = computed(() => {
+                if (!form.name || form.name.length < 2) return [];
+                
+                return products.value
+                    .map(p => ({
+                        ...p,
+                        similarity: calculateSimilarity(form.name, p.name)
+                    }))
+                    .filter(p => p.similarity > 0.3 && p.id !== editingId.value) // Lowered to 0.3
+                    .sort((a, b) => b.similarity - a.similarity)
+                    .slice(0, 3);
+            });
+
+            // Duplicate Check Trigger (on Blur)
+            const checkDuplicateName = () => {
+                // If candidates exist and user hasn't explicitly confirmed this round
+                if (duplicateCandidates.value.length > 0 && !isDuplicateConfirmed.value) {
+                    showDuplicateModal.value = true;
+                }
+            };
+
+            const confirmDuplicate = () => {
+                isDuplicateConfirmed.value = true; // Mark as confirmed valid
+                showDuplicateModal.value = false;
+            };
+
+            // Reset confirmation on name change
+            watch(() => form.name, () => {
+                isDuplicateConfirmed.value = false;
             });
 
             // --- Image Viewer Logic (Zoom & Pan) ---
@@ -982,6 +1071,7 @@
                     frontImage: null, ingredientImage: null, dietary: ['no-gluten'] 
                 });
                 showUpload.value = true;
+                isDuplicateConfirmed.value = false; // Reset warning state
             };
 
             const editProduct = (product) => {
@@ -998,11 +1088,18 @@
                     dietary: [...product.dietaryArray] 
                 });
                 showUpload.value = true;
+                isDuplicateConfirmed.value = true; // Editing existing item usually implies knowing what it is
             };
 
             const submitProduct = async () => {
                 if(!form.name || !form.location || !form.frontImage || !form.ingredientImage) return alert("請填寫所有欄位");
                 if(!db || !user.value) return alert("未連線");
+
+                // New Guard: Check duplicate candidates on submit
+                if (duplicateCandidates.value.length > 0 && !isDuplicateConfirmed.value) {
+                    showDuplicateModal.value = true;
+                    return;
+                }
 
                 isSubmitting.value = true;
                 const appIdStr = 'mymoney-8e727';
@@ -1073,9 +1170,11 @@
                 navState, regions, storeTypes, categories,
                 filteredProducts, showProductList, suggestedLocations, showLocSuggestions, hideSuggestions, searchQuery,
                 form, editingId, scale, pan, // Export zoom state
+                showDuplicateModal, isDuplicateConfirmed, duplicateCandidates, // Duplicate check
                 resetView, toggleDietFilter, toggleFormDietary, getRegionCount, getStoreTypeCount, getStoreTypeLabel, getDietLabel, hasDietTag,
                 saveConfig, resetToDefault, handleImage, submitProduct, openUploadModal, editProduct, confirmDelete, closeUpload, 
-                viewImage, openImageViewer, closeViewer, zoomIn, zoomOut, handleWheel, startPan, handleTouchStart, handleTouchMove, handleTouchEnd // Viewer functions
+                viewImage, openImageViewer, closeViewer, zoomIn, zoomOut, handleWheel, startPan, handleTouchStart, handleTouchMove, handleTouchEnd,
+                checkDuplicateName, confirmDuplicate
             };
         }
     }).mount('#app');
