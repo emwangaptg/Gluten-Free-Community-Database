@@ -381,6 +381,7 @@
                     </div>
 
                     <div class="flex gap-3 relative">
+                        <!-- 修改後的圖片點擊事件，傳遞完整的 product 物件以便後續擴充 (若需要) 或直接傳圖片 -->
                         <div class="w-20 h-20 rounded-xl bg-gray-100 shrink-0 overflow-hidden cursor-pointer" @click="openImageViewer(product.frontImage)">
                             <img :src="product.frontImage" class="w-full h-full object-cover">
                         </div>
@@ -452,7 +453,8 @@
     </main>
 
     <!-- FAB -->
-    <button @click="openUploadModal" class="absolute bottom-6 right-6 w-14 h-14 rounded-full btn-main flex items-center justify-center text-2xl shadow-xl z-20 hover:scale-110 transition-transform">
+    <!-- 修改: 將 bottom-6 改為 bottom-24，上移按鈕位置以避開手機底部操作區 -->
+    <button @click="openUploadModal" class="absolute bottom-24 right-6 w-14 h-14 rounded-full btn-main flex items-center justify-center text-2xl shadow-xl z-20 hover:scale-110 transition-transform">
         <i class="fa-solid fa-plus"></i>
     </button>
 
